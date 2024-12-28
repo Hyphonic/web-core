@@ -32,6 +32,22 @@ jobs:
         with:
           python-version: '3.x'
 
+      - name: 🚀 Restore Meme IDs Cache
+        uses: actions/cache@v3
+        with:
+          path: cache/meme_ids.json
+          key: meme-ids-cache
+
+      # Added Step: Show meme_ids.json Before Running Python Script
+      - name: 📖 Show meme_ids.json Before
+        run: |
+          if [ -f cache/meme_ids.json ]; then
+            echo "📄 Contents of meme_ids.json before:"
+            cat cache/meme_ids.json
+          else
+            echo "⚠️ meme_ids.json does not exist before the script runs."
+          fi
+
       - name: 🧰 Install Dependencies
         run: |
           python -m pip install --upgrade pip
@@ -46,7 +62,6 @@ jobs:
           mkdir -p ~/.config/rclone
           echo "${{ secrets.PIXELDRAIN_CONF }}" > ~/.config/rclone/rclone.conf
 
-      # 2) Download Latest Memes, updating or creating meme_ids.json
       - name: ⏬ Download Latest Memes
         id: download-memes
         env:
@@ -69,9 +84,9 @@ jobs:
           disable_cache_check = os.getenv("DISABLE_CACHE_CHECK", "false").lower() == "true"
           show_debug = os.getenv("SHOW_DEBUG", "false").lower() == "true"
 
-          def debug_log(message):
+          def debug_log(msg):
               if show_debug:
-                  print(f"🛠️ DEBUG: {message}")
+                  print(f"🛠️ DEBUG: {msg}")
 
           debug_log("✅ Initializing Reddit client in read-only mode...")
           reddit = praw.Reddit(
@@ -87,54 +102,48 @@ jobs:
               with open(cache_file, "r") as f:
                   cached_ids = set(json.load(f))
               debug_log(f"{len(cached_ids)} cached IDs loaded.")
-              debug_log(f"All IDs: {cached_ids}")
-          except (FileNotFoundError, json.JSONDecodeError) as e:
-              debug_log(f"⚠️ No valid cache found. Error: {e}")
+          except:
+              debug_log("⚠️ No valid cache found.")
               cached_ids = set()
 
-          image_dir = "cache"
-          os.makedirs(image_dir, exist_ok=True)
-          debug_log("🔄 Fetching latest posts from r/memes...")
           new_ids = []
-          valid_image_extensions = ['png','jpg','jpeg','webp','gif']
-
+          valid_exts = ['.png','.jpg','.jpeg','.webp','.gif']
           for post in reddit.subreddit("memes").new(limit=20):
-              debug_log(f"Processing post: {post.title} | ID: {post.id} | URL: {post.url}")
               if disable_cache_check or post.id not in cached_ids:
-                  debug_log(f"🆕 Processing new ID: {post.id}")
                   try:
-                      debug_log("Sending HEAD request...")
-                      response = requests.head(post.url, allow_redirects=True, timeout=5)
-                      content_type = response.headers.get("Content-Type", "")
-                      debug_log(f"Content-Type: {content_type}")
-                      if content_type.startswith("image/") or any(ext in post.url.lower() for ext in valid_image_extensions):
-                          print(f"🎉 New Meme Found:\n  Title: {post.title}\n  Author: u/{post.author}\n  Upvotes: {post.score}\n  URL: {post.url}")
-                          debug_log("Downloading image...")
-                          response = requests.get(post.url, timeout=10)
-                          filename = os.path.join(image_dir, os.path.basename(post.url))
-                          with open(filename, "wb") as f:
-                              f.write(response.content)
+                      head = requests.head(post.url, allow_redirects=True, timeout=5)
+                      ctype = head.headers.get("Content-Type","").lower()
+                      if ctype.startswith("image/") or any(post.url.lower().endswith(e) for e in valid_exts):
+                          print(f"🎉 New Meme Found: {post.title} | {post.url}")
+                          data = requests.get(post.url, timeout=10).content
+                          fname = os.path.join("cache", os.path.basename(post.url))
+                          with open(fname, "wb") as f:
+                              f.write(data)
                           new_ids.append(post.id)
-                      else:
-                          debug_log("⚠️ Skipping non-image URL.")
-                  except requests.RequestException as e:
-                      debug_log(f"❌ Request failed: {e}")
-              else:
-                  debug_log(f"Already seen ID: {post.id}, skipping.")
+                  except:
+                      pass
 
           if new_ids:
               cached_ids.update(new_ids)
               with open(cache_file, "w") as f:
-                  json.dump(list(cached_ids), f)
-              debug_log(f"📝 Cache updated with IDs: {new_ids}")
-              print(f"🎉 {len(new_ids)} new memes downloaded.")
+                  json.dump(sorted(cached_ids), f)
+              print(f"🎉 Downloaded {len(new_ids)} new memes.")
           else:
               print("✨ No New Memes Found!")
           EOF
 
-      - name: 📜 List All Files
+      # Added Step: Show meme_ids.json After Running Python Script
+      - name: 📖 Show meme_ids.json After
         run: |
-          tree
+          if [ -f cache/meme_ids.json ]; then
+            echo "📄 Contents of meme_ids.json after:"
+            cat cache/meme_ids.json
+          else
+            echo "⚠️ meme_ids.json does not exist after the script runs."
+          fi
+
+      - name: 📜 List All Files
+        run: tree
 
       - name: 🌐 Upload Memes with Rclone
         run: |
@@ -153,14 +162,9 @@ jobs:
             cache/*.webp
             cache/*.gif
 
-      # 5) Commit and push the updated meme_ids.json back to the repository
-      - name: 📤 Commit and Push meme_ids.json
-        if: steps.download-memes.outcome == 'success'
-        uses: EndBug/add-and-commit@v9
+      - name: 💾 Update Meme IDs Cache
+        if: always()
+        uses: actions/cache@v3
         with:
-          message: "🔄 Update meme_ids.json"
-          default_author: github_actions
-          committer_name: GitHub Actions
-          add: 'cache'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          path: cache/meme_ids.json
+          key: meme-ids-cache
