@@ -156,11 +156,8 @@ jobs:
       # 5) Commit and push the updated meme_ids.json back to the repository
       - name: 📤 Commit and Push meme_ids.json
         if: steps.download-memes.outcome == 'success'
-        run: |
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          git add cache/meme_ids.json
-          git commit -m 'Update meme_ids.json'
-          git push
+        uses: EndBug/add-and-commit@v9
+        with:
+          message: "🔄 Update meme_ids.json"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
