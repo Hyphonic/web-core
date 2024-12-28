@@ -140,10 +140,13 @@ jobs:
 
           # After processing all posts, update the cache
           debug_log(f"Updating cache with {len(new_ids)} new IDs...")
-          cached_ids.update(new_ids)
+          cached_ids.update(new_ids)  # Ensure this line is correctly updating the set
           with open(cache_file, "w") as f:
               json.dump(list(cached_ids), f)
           debug_log(f"✅ Cache updated with IDs: {new_ids}")
+
+          # Add a debug statement to print the entire cached_ids after update
+          debug_log(f"🔍 Current cached IDs after update: {cached_ids}")
 
           if not new_ids:
               print("✨ No New Memes Found!")
@@ -168,10 +171,3 @@ jobs:
             cache/*.jpeg
             cache/*.png
             cache/*.webp
-
-      - name: 🧹 Update Cache
-        if: steps.download-memes.outcome == 'success'
-        uses: actions/cache@v4
-        with:
-          path: cache/meme_ids.json
-          key: reddit-memes-cache
