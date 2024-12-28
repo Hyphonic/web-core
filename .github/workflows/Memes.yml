@@ -80,14 +80,15 @@ jobs:
           for post in reddit.subreddit("memes").new(limit=10):
               print(f"🔧 DEBUG: Processing post: {post.title} | URL: {post.url}")
               
-              if post.url not in cached_urls:
+              if post.url:
                   try:
                       print("🔧 DEBUG: Sending HEAD request to validate content type...")
                       response = requests.head(post.url, allow_redirects=True, timeout=5)
                       content_type = response.headers.get("Content-Type", "")
                       print(f"🔧 DEBUG: Content-Type for {post.url} is {content_type}.")
           
-                      if content_type.startswith("image/"):
+                      # Check if the content type is an image (including .webp)
+                      if content_type.startswith("image/") and "webp" in content_type:
                           print(f"🎉 New Meme Found:\n  Title: {post.title}\n  Author: u/{post.author}\n  Upvotes: {post.score}\n  URL: {post.url}")
                           
                           # Save the image
