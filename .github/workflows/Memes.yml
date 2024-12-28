@@ -23,6 +23,9 @@ jobs:
     steps:
       - name: 📥 Checkout Code
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
 
       - name: 📦 Set Up Python
         uses: actions/setup-python@v5
@@ -42,14 +45,6 @@ jobs:
         run: |
           mkdir -p ~/.config/rclone
           echo "${{ secrets.PIXELDRAIN_CONF }}" > ~/.config/rclone/rclone.conf
-
-      # 1) Try downloading previously archived meme_ids.json (if it exists as an artifact).
-      - name: 🔄 Download Meme IDs Artifact (if any)
-        uses: actions/download-artifact@v4
-        with:
-          name: meme-ids
-          path: cache
-          if-no-files-found: ignore
 
       # 2) Download Latest Memes, updating or creating meme_ids.json
       - name: ⏬ Download Latest Memes
@@ -158,11 +153,14 @@ jobs:
             cache/*.webp
             cache/*.gif
 
-      # 4) Archive meme_ids.json as a separate artifact for next run
-      - name: 🗄️ Archive Meme IDs
+      # 5) Commit and push the updated meme_ids.json back to the repository
+      - name: 📤 Commit and Push meme_ids.json
         if: steps.download-memes.outcome == 'success'
-        uses: actions/upload-artifact@v4
-        with:
-          name: meme-ids
-          path: cache/meme_ids.json
-          if-no-files-found: ignore
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git add cache/meme_ids.json
+          git commit -m 'Update meme_ids.json'
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
