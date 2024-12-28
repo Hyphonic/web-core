@@ -3,7 +3,18 @@ name: Download Memes From Reddit
 on:
   schedule:
     - cron: '0 * * * *' # Runs every hour
-  workflow_dispatch: # Allows manual triggering of the workflow
+  workflow_dispatch:
+    inputs:
+      disable_cache_check:
+        description: 'Disable cache check (true/false)'
+        required: false
+        default: 'false'
+        type: boolean
+      show_debug:
+        description: 'Enable debug messages (true/false)'
+        required: false
+        default: 'true'
+        type: boolean
 
 jobs:
   download-memes:
@@ -21,8 +32,7 @@ jobs:
       - name: 🧰 Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install --upgrade git+https://github.com/praw-dev/praw.git
-          pip install requests
+          pip install praw
 
       - name: 🔄 Restore Cache
         id: cache-restore
@@ -37,6 +47,8 @@ jobs:
           CLIENT_ID: ${{ secrets.REDDIT_CLIENT_ID }}
           CLIENT_SECRET: ${{ secrets.REDDIT_CLIENT_SECRET }}
           USER_AGENT: ${{ secrets.REDDIT_USER_AGENT }}
+          DISABLE_CACHE_CHECK: ${{ github.event.inputs.disable_cache_check }}
+          SHOW_DEBUG: ${{ github.event.inputs.show_debug }}
         run: |
           mkdir -p cache
           touch cache/memes.json
@@ -45,74 +57,84 @@ jobs:
           import json
           import requests
           import praw
-          
-          # Environment variables for credentials
+
+          # Environment variables
           client_id = os.getenv("CLIENT_ID")
           client_secret = os.getenv("CLIENT_SECRET")
           user_agent = os.getenv("USER_AGENT")
-          
-          print("🔧 DEBUG: Initializing Reddit client in read-only mode...")
+          disable_cache_check = os.getenv("DISABLE_CACHE_CHECK", "false").lower() == "true"
+          show_debug = os.getenv("SHOW_DEBUG", "true").lower() == "true"
+
+          # Helper function for debug logging
+          def debug_log(message):
+              if show_debug:
+                  print(f"🔧 DEBUG: {message}")
+
+          debug_log("Initializing Reddit client in read-only mode...")
           reddit = praw.Reddit(
               client_id=client_id,
               client_secret=client_secret,
               user_agent=user_agent,
           )
-          
+
           # Load cached URLs
           cache_file = "cache/memes.json"
-          print(f"🔧 DEBUG: Loading cached URLs from {cache_file}...")
+          debug_log(f"Loading cached URLs from {cache_file}...")
           try:
               with open(cache_file, "r") as f:
                   cached_urls = set(json.load(f))
-              print(f"🔧 DEBUG: {len(cached_urls)} cached URLs loaded.")
+              debug_log(f"{len(cached_urls)} cached URLs loaded.")
           except (FileNotFoundError, json.JSONDecodeError) as e:
-              print(f"⚠️ DEBUG: Cache file not found or invalid. Starting with an empty cache. Error: {e}")
+              debug_log(f"Cache file not found or invalid. Starting with an empty cache. Error: {e}")
               cached_urls = set()
-          
+
           # Create a directory for images
           image_dir = "cache"
           os.makedirs(image_dir, exist_ok=True)
-          print(f"🔧 DEBUG: Ensured image directory exists at {image_dir}.")
-          
+          debug_log(f"Ensured image directory exists at {image_dir}.")
+
           # Fetch new posts from r/memes
-          print("🔧 DEBUG: Fetching latest posts from r/memes...")
+          debug_log("Fetching latest posts from r/memes...")
           new_urls = []
+          valid_image_extensions = ['png', 'jpeg', 'jpg', 'webp']
           for post in reddit.subreddit("memes").new(limit=10):
-              print(f"🔧 DEBUG: Processing post: {post.title} | URL: {post.url}")
-              
-              if post.url:
+              debug_log(f"Processing post: {post.title} | URL: {post.url}")
+
+              # Only process if not cached or if cache check is disabled
+              if disable_cache_check or post.url not in cached_urls:
+                  debug_log(f"Cache check {'disabled' if disable_cache_check else 'enabled'}, processing URL: {post.url}")
                   try:
-                      print("🔧 DEBUG: Sending HEAD request to validate content type...")
+                      debug_log("Sending HEAD request to validate content type...")
                       response = requests.head(post.url, allow_redirects=True, timeout=5)
                       content_type = response.headers.get("Content-Type", "")
-                      print(f"🔧 DEBUG: Content-Type for {post.url} is {content_type}.")
-          
-                      # Check if the content type is an image (including .webp)
-                      if content_type.startswith("image/") and "webp" in content_type:
+                      debug_log(f"Content-Type for {post.url} is {content_type}.")
+
+                      # Check for valid image extensions or Content-Type
+                      if content_type.startswith("image/") or any(ext in post.url.lower() for ext in valid_image_extensions):
                           print(f"🎉 New Meme Found:\n  Title: {post.title}\n  Author: u/{post.author}\n  Upvotes: {post.score}\n  URL: {post.url}")
                           
                           # Save the image
-                          print(f"🔧 DEBUG: Sending GET request to download the image...")
+                          debug_log("Sending GET request to download the image...")
                           response = requests.get(post.url, timeout=10)
                           filename = os.path.join(image_dir, os.path.basename(post.url))
                           with open(filename, "wb") as f:
                               f.write(response.content)
-                          print(f"✅ Image saved to {filename}.")
+                          debug_log(f"✅ Image saved to {filename}.")
                           new_urls.append(post.url)
                       else:
-                          print(f"⚠️ Skipping Non-Image URL: {post.url}")
+                          debug_log(f"⚠️ Skipping Non-Image URL: {post.url}")
                   except requests.RequestException as e:
-                      print(f"❌ Failed to Process URL {post.url}. Error: {e}")
+                      debug_log(f"❌ Failed to Process URL {post.url}. Error: {e}")
               else:
-                  print(f"⚠️ DEBUG: URL already cached: {post.url}")
-          
+                  debug_log(f"⚠️ URL already cached and cache check enabled: {post.url}")
+
           # Update cache
-          print(f"🔧 DEBUG: Updating cache with {len(new_urls)} new URLs...")
+          debug_log(f"Updating cache with {len(new_urls)} new URLs...")
           cached_urls.update(new_urls)
           with open(cache_file, "w") as f:
               json.dump(list(cached_urls), f)
-          print("✅ Cache updated.")
-          
+          debug_log("✅ Cache updated.")
+
           if not new_urls:
               print("✨ No New Memes Found!")
           else:
