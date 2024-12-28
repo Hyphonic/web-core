@@ -73,9 +73,9 @@ jobs:
 
           def debug_log(message):
               if show_debug:
-                  print(f"🔧 DEBUG: {message}")
+                  print(f"🔎 DEBUG: {message}")
 
-          debug_log("Initializing Reddit client in read-only mode...")
+          debug_log(f"✅ Initializing Reddit client in read-only mode...")
           reddit = praw.Reddit(
               client_id=client_id,
               client_secret=client_secret,
@@ -83,27 +83,27 @@ jobs:
           )
 
           cache_file = "cache/meme_ids.json"
-          debug_log(f"Loading cached IDs from {cache_file}...")
+          debug_log(f"🔍 Loading cached IDs from {cache_file}...")
           try:
               with open(cache_file, "r") as f:
                   cached_ids = set(json.load(f))
               debug_log(f"{len(cached_ids)} cached IDs loaded.")
               debug_log(f"All IDs: {cached_ids}")
           except (FileNotFoundError, json.JSONDecodeError) as e:
-              debug_log(f"No valid cache found. Error: {e}")
+              debug_log(f"⚠️ No valid cache found. Error: {e}")
               cached_ids = set()
 
           image_dir = "cache"
           os.makedirs(image_dir, exist_ok=True)
 
-          debug_log("Fetching latest posts from r/memes...")
+          debug_log("🔄 Fetching latest posts from r/memes...")
           new_ids = []
           valid_image_extensions = ['png','jpg','jpeg','webp','gif']
 
           for post in reddit.subreddit("memes").new(limit=20):
               debug_log(f"Processing post: {post.title} | ID: {post.id} | URL: {post.url}")
               if disable_cache_check or post.id not in cached_ids:
-                  debug_log(f"Processing new ID: {post.id}")
+                  debug_log(f"🆕 Processing new ID: {post.id}")
                   try:
                       debug_log("Sending HEAD request...")
                       response = requests.head(post.url, allow_redirects=True, timeout=5)
@@ -118,9 +118,9 @@ jobs:
                               f.write(response.content)
                           new_ids.append(post.id)
                       else:
-                          debug_log("Skipping non-image URL.")
+                          debug_log("⚠️ Skipping non-image URL.")
                   except requests.RequestException as e:
-                      debug_log(f"Request failed: {e}")
+                      debug_log(f"❌ Request failed: {e}")
               else:
                   debug_log(f"Already seen ID: {post.id}, skipping.")
 
@@ -128,7 +128,7 @@ jobs:
               cached_ids.update(new_ids)
               with open(cache_file, "w") as f:
                   json.dump(list(cached_ids), f)
-              debug_log(f"Cache updated with IDs: {new_ids}")
+              debug_log(f"📝 Cache updated with IDs: {new_ids}")
               print(f"🎉 {len(new_ids)} new memes downloaded.")
           else:
               print("✨ No New Memes Found!")
