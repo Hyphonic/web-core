@@ -159,5 +159,8 @@ jobs:
         uses: EndBug/add-and-commit@v9
         with:
           message: "🔄 Update meme_ids.json"
+          default_author: github_actions
+          committer_name: GitHub Actions
+          add: 'cache'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
