@@ -43,14 +43,15 @@ jobs:
           mkdir -p ~/.config/rclone
           echo "${{ secrets.PIXELDRAIN_CONF }}" > ~/.config/rclone/rclone.conf
 
-      # Restore the previously cached meme_ids.json (if any)
-      - name: 🔄 Restore Cache
-        id: cache-restore
-        uses: actions/cache@v4
+      # 1) Try downloading previously archived meme_ids.json (if it exists as an artifact).
+      - name: 🔄 Download Meme IDs Artifact (if any)
+        uses: actions/download-artifact@v4
         with:
+          name: meme-ids
           path: cache
-          key: reddit-memes-cache
+          if-no-files-found: ignore
 
+      # 2) Download Latest Memes, updating or creating meme_ids.json
       - name: ⏬ Download Latest Memes
         id: download-memes
         env:
@@ -86,6 +87,7 @@ jobs:
 
           cache_file = "cache/meme_ids.json"
           debug_log(f"🔍 Loading cached IDs from {cache_file}...")
+
           try:
               with open(cache_file, "r") as f:
                   cached_ids = set(json.load(f))
@@ -143,7 +145,8 @@ jobs:
         run: |
           rclone copy cache Pixeldrain:"💯 Memes"
 
-      - name: 🛠️ Save Artifacts
+      # 3) Save images as usual
+      - name: 🛠️ Save Artifacts (Images)
         if: steps.download-memes.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
@@ -155,10 +158,11 @@ jobs:
             cache/*.webp
             cache/*.gif
 
-      # **Crucial**: Re-save the updated memo IDs for future runs
-      - name: 🧹 Update Cache
+      # 4) Archive meme_ids.json as a separate artifact for next run
+      - name: 🗄️ Archive Meme IDs
         if: steps.download-memes.outcome == 'success'
-        uses: actions/cache@v4
+        uses: actions/upload-artifact@v4
         with:
-          path: cache
-          key: reddit-memes-cache
+          name: meme-ids
+          path: cache/meme_ids.json
+          if-no-files-found: ignore
