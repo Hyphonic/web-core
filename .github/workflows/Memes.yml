@@ -18,7 +18,6 @@ on:
 
 jobs:
   download-memes:
-    name: 🌐 Download Memes
     runs-on: ubuntu-latest
     steps:
       - name: 📥 Checkout Code
@@ -32,7 +31,7 @@ jobs:
       - name: 🧰 Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install praw
+          pip install praw requests
 
       - name: 🔧 Install Rclone
         run: |
@@ -47,7 +46,7 @@ jobs:
         id: cache-restore
         uses: actions/cache@v4
         with:
-          path: cache/meme_ids.json
+          path: cache
           key: reddit-memes-cache
 
       - name: ⏬ Download Latest Memes
@@ -60,21 +59,18 @@ jobs:
           SHOW_DEBUG: ${{ github.event.inputs.show_debug }}
         run: |
           mkdir -p cache
-          touch cache/meme_ids.json
           python - <<EOF
           import os
           import json
           import requests
           import praw
 
-          # Environment variables
           client_id = os.getenv("CLIENT_ID")
           client_secret = os.getenv("CLIENT_SECRET")
           user_agent = os.getenv("USER_AGENT")
           disable_cache_check = os.getenv("DISABLE_CACHE_CHECK", "false").lower() == "true"
-          show_debug = os.getenv("SHOW_DEBUG", "true").lower() == "true"
+          show_debug = os.getenv("SHOW_DEBUG", "false").lower() == "true"
 
-          # Helper function for debug logging
           def debug_log(message):
               if show_debug:
                   print(f"🔧 DEBUG: {message}")
@@ -86,7 +82,6 @@ jobs:
               user_agent=user_agent,
           )
 
-          # Load cached IDs
           cache_file = "cache/meme_ids.json"
           debug_log(f"Loading cached IDs from {cache_file}...")
           try:
@@ -95,63 +90,48 @@ jobs:
               debug_log(f"{len(cached_ids)} cached IDs loaded.")
               debug_log(f"All IDs: {cached_ids}")
           except (FileNotFoundError, json.JSONDecodeError) as e:
-              debug_log(f"Cache file not found or invalid. Starting with an empty cache. Error: {e}")
+              debug_log(f"No valid cache found. Error: {e}")
               cached_ids = set()
 
-          # Create a directory for images
           image_dir = "cache"
           os.makedirs(image_dir, exist_ok=True)
-          debug_log(f"Ensured image directory exists at {image_dir}.")
 
-          # Fetch new posts from r/memes
           debug_log("Fetching latest posts from r/memes...")
           new_ids = []
-          valid_image_extensions = ['png', 'jpeg', 'jpg', 'webp']
+          valid_image_extensions = ['png','jpg','jpeg','webp','gif']
+
           for post in reddit.subreddit("memes").new(limit=20):
               debug_log(f"Processing post: {post.title} | ID: {post.id} | URL: {post.url}")
-
-              # Only process if not cached or if cache check is disabled
               if disable_cache_check or post.id not in cached_ids:
-                  debug_log(f"Cache check {'disabled' if disable_cache_check else 'enabled'}, processing ID: {post.id}")
+                  debug_log(f"Processing new ID: {post.id}")
                   try:
-                      debug_log("Sending HEAD request to validate content type...")
+                      debug_log("Sending HEAD request...")
                       response = requests.head(post.url, allow_redirects=True, timeout=5)
                       content_type = response.headers.get("Content-Type", "")
-                      debug_log(f"Content-Type for {post.url} is {content_type}.")
-
-                      # Check for valid image extensions or Content-Type
+                      debug_log(f"Content-Type: {content_type}")
                       if content_type.startswith("image/") or any(ext in post.url.lower() for ext in valid_image_extensions):
                           print(f"🎉 New Meme Found:\n  Title: {post.title}\n  Author: u/{post.author}\n  Upvotes: {post.score}\n  URL: {post.url}")
-                          
-                          # Save the image
-                          debug_log("Sending GET request to download the image...")
+                          debug_log("Downloading image...")
                           response = requests.get(post.url, timeout=10)
                           filename = os.path.join(image_dir, os.path.basename(post.url))
                           with open(filename, "wb") as f:
                               f.write(response.content)
-                          debug_log(f"✅ Image saved to {filename}.")
                           new_ids.append(post.id)
                       else:
-                          debug_log(f"⚠️ Skipping Non-Image URL: {post.url}")
+                          debug_log("Skipping non-image URL.")
                   except requests.RequestException as e:
-                      debug_log(f"❌ Failed to Process URL {post.url}. Error: {e}")
+                      debug_log(f"Request failed: {e}")
               else:
-                  debug_log(f"🔄 Post ID {post.id} has already been seen. Skipping download.")
+                  debug_log(f"Already seen ID: {post.id}, skipping.")
 
-          # After processing all posts, update the cache
-          debug_log(f"Updating cache with {len(new_ids)} new IDs...")
-          cached_ids.update(new_ids)  # Ensure this line is correctly updating the set
-          with open(cache_file, "w") as f:
-              json.dump(list(cached_ids), f)
-          debug_log(f"✅ Cache updated with IDs: {new_ids}")
-
-          # Add a debug statement to print the entire cached_ids after update
-          debug_log(f"🔍 Current cached IDs after update: {cached_ids}")
-
-          if not new_ids:
-              print("✨ No New Memes Found!")
-          else:
+          if new_ids:
+              cached_ids.update(new_ids)
+              with open(cache_file, "w") as f:
+                  json.dump(list(cached_ids), f)
+              debug_log(f"Cache updated with IDs: {new_ids}")
               print(f"🎉 {len(new_ids)} new memes downloaded.")
+          else:
+              print("✨ No New Memes Found!")
           EOF
 
       - name: 📜 List All Files
@@ -168,6 +148,8 @@ jobs:
         with:
           name: memes
           path: |
+            cache/*.jpg
             cache/*.jpeg
             cache/*.png
             cache/*.webp
+            cache/*.gif
