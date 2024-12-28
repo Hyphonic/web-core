@@ -8,12 +8,12 @@ on:
       disable_cache_check:
         description: 'Disable cache check (true/false)'
         required: false
-        default: 'false'
+        default: false
         type: boolean
       show_debug:
         description: 'Enable debug messages (true/false)'
         required: false
-        default: 'false'
+        default: false
         type: boolean
 
 jobs:
@@ -47,7 +47,7 @@ jobs:
         id: cache-restore
         uses: actions/cache@v4
         with:
-          path: cache/memes.json
+          path: cache/meme_ids.json
           key: reddit-memes-cache
 
       - name: ⏬ Download Latest Memes
@@ -60,7 +60,7 @@ jobs:
           SHOW_DEBUG: ${{ github.event.inputs.show_debug }}
         run: |
           mkdir -p cache
-          touch cache/memes.json
+          touch cache/meme_ids.json
           python - <<EOF
           import os
           import json
@@ -86,16 +86,16 @@ jobs:
               user_agent=user_agent,
           )
 
-          # Load cached URLs
-          cache_file = "cache/memes.json"
-          debug_log(f"Loading cached URLs from {cache_file}...")
+          # Load cached IDs
+          cache_file = "cache/meme_ids.json"
+          debug_log(f"Loading cached IDs from {cache_file}...")
           try:
               with open(cache_file, "r") as f:
-                  cached_urls = set(json.load(f))
-              debug_log(f"{len(cached_urls)} cached URLs loaded.")
+                  cached_ids = set(json.load(f))
+              debug_log(f"{len(cached_ids)} cached IDs loaded.")
           except (FileNotFoundError, json.JSONDecodeError) as e:
               debug_log(f"Cache file not found or invalid. Starting with an empty cache. Error: {e}")
-              cached_urls = set()
+              cached_ids = set()
 
           # Create a directory for images
           image_dir = "cache"
@@ -104,14 +104,14 @@ jobs:
 
           # Fetch new posts from r/memes
           debug_log("Fetching latest posts from r/memes...")
-          new_urls = []
+          new_ids = []
           valid_image_extensions = ['png', 'jpeg', 'jpg', 'webp']
           for post in reddit.subreddit("memes").new(limit=20):
-              debug_log(f"Processing post: {post.title} | URL: {post.url}")
+              debug_log(f"Processing post: {post.title} | ID: {post.id} | URL: {post.url}")
 
               # Only process if not cached or if cache check is disabled
-              if disable_cache_check or post.url not in cached_urls:
-                  debug_log(f"Cache check {'disabled' if disable_cache_check else 'enabled'}, processing URL: {post.url}")
+              if disable_cache_check or post.id not in cached_ids:
+                  debug_log(f"Cache check {'disabled' if disable_cache_check else 'enabled'}, processing ID: {post.id}")
                   try:
                       debug_log("Sending HEAD request to validate content type...")
                       response = requests.head(post.url, allow_redirects=True, timeout=5)
@@ -129,25 +129,25 @@ jobs:
                           with open(filename, "wb") as f:
                               f.write(response.content)
                           debug_log(f"✅ Image saved to {filename}.")
-                          new_urls.append(post.url)
+                          new_ids.append(post.id)
                       else:
                           debug_log(f"⚠️ Skipping Non-Image URL: {post.url}")
                   except requests.RequestException as e:
                       debug_log(f"❌ Failed to Process URL {post.url}. Error: {e}")
               else:
-                  debug_log(f"⚠️ URL already cached and cache check enabled: {post.url}")
+                  debug_log(f"🔄 Post ID {post.id} has already been seen. Skipping download.")
 
           # Update cache
-          debug_log(f"Updating cache with {len(new_urls)} new URLs...")
-          cached_urls.update(new_urls)
+          debug_log(f"Updating cache with {len(new_ids)} new IDs...")
+          cached_ids.update(new_ids)
           with open(cache_file, "w") as f:
-              json.dump(list(cached_urls), f)
+              json.dump(list(cached_ids), f)
           debug_log("✅ Cache updated.")
 
-          if not new_urls:
+          if not new_ids:
               print("✨ No New Memes Found!")
           else:
-              print(f"🎉 {len(new_urls)} new memes downloaded.")
+              print(f"🎉 {len(new_ids)} new memes downloaded.")
           EOF
 
       - name: 📜 List All Files
@@ -172,5 +172,5 @@ jobs:
         if: steps.download-memes.outcome == 'success'
         uses: actions/cache@v4
         with:
-          path: cache/memes.json
+          path: cache/meme_ids.json
           key: reddit-memes-cache
