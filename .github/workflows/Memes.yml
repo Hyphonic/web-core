@@ -43,6 +43,7 @@ jobs:
           mkdir -p ~/.config/rclone
           echo "${{ secrets.PIXELDRAIN_CONF }}" > ~/.config/rclone/rclone.conf
 
+      # Restore the previously cached meme_ids.json (if any)
       - name: 🔄 Restore Cache
         id: cache-restore
         uses: actions/cache@v4
@@ -74,9 +75,9 @@ jobs:
 
           def debug_log(message):
               if show_debug:
-                  print(f"🔎 DEBUG: {message}")
+                  print(f"🛠️ DEBUG: {message}")
 
-          debug_log(f"✅ Initializing Reddit client in read-only mode...")
+          debug_log("✅ Initializing Reddit client in read-only mode...")
           reddit = praw.Reddit(
               client_id=client_id,
               client_secret=client_secret,
@@ -96,7 +97,6 @@ jobs:
 
           image_dir = "cache"
           os.makedirs(image_dir, exist_ok=True)
-
           debug_log("🔄 Fetching latest posts from r/memes...")
           new_ids = []
           valid_image_extensions = ['png','jpg','jpeg','webp','gif']
@@ -154,3 +154,11 @@ jobs:
             cache/*.png
             cache/*.webp
             cache/*.gif
+
+      # **Crucial**: Re-save the updated memo IDs for future runs
+      - name: 🧹 Update Cache
+        if: steps.download-memes.outcome == 'success'
+        uses: actions/cache@v4
+        with:
+          path: cache
+          key: reddit-memes-cache
