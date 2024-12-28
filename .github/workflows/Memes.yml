@@ -13,7 +13,7 @@ on:
       show_debug:
         description: 'Enable debug messages (true/false)'
         required: false
-        default: 'true'
+        default: 'false'
         type: boolean
 
 jobs:
@@ -154,11 +154,13 @@ jobs:
         run: |
           tree
 
+      - name: 📑 Create File List for rclone
+        run: |
+          find cache -type f \( -iname \*.jpeg -o -iname \*.png -o -iname \*.webp \) > filelist.txt
+
       - name: 🌐 Upload Memes with Rclone
         run: |
-          rclone copy cache/*.jpeg Pixeldrain:"💯 Memes"
-          rclone copy cache/*.png Pixeldrain:"💯 Memes"
-          rclone copy cache/*.webp Pixeldrain:"💯 Memes"
+          rclone copy --files-from=filelist.txt Pixeldrain:"💯 Memes"
 
       - name: 🛠️ Save Artifacts
         if: steps.download-memes.outcome == 'success'
