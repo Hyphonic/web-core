@@ -156,7 +156,8 @@ jobs:
 
       - name: 📑 Create File List for rclone
         run: |
-          find cache -type f \( -iname \*.jpeg -o -iname \*.png -o -iname \*.webp \) > filelist.txt
+          find $(pwd)/cache -type f \( -iname \*.jpeg -o -iname \*.png -o -iname \*.webp \) > filelist.txt
+          cat filelist.txt
 
       - name: 🌐 Upload Memes with Rclone
         run: |
