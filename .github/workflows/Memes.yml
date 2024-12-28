@@ -18,6 +18,7 @@ on:
 
 jobs:
   download-memes:
+    name: 🌐 Download Memes
     runs-on: ubuntu-latest
     steps:
       - name: 📥 Checkout Code
