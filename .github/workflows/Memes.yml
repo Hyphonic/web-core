@@ -97,7 +97,7 @@ jobs:
           debug_log("Fetching latest posts from r/memes...")
           new_urls = []
           valid_image_extensions = ['png', 'jpeg', 'jpg', 'webp']
-          for post in reddit.subreddit("memes").new(limit=10):
+          for post in reddit.subreddit("memes").new(limit=20):
               debug_log(f"Processing post: {post.title} | URL: {post.url}")
 
               # Only process if not cached or if cache check is disabled
@@ -150,7 +150,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: memes
-          path: cache/*.png,cache/*.jpg,cache/*.jpeg
+          path: |
+            cache/*.jpeg
+            cache/*.png
+            cache/*.webp
 
       - name: 🧹 Update Cache
         if: steps.download-memes.outcome == 'success'
