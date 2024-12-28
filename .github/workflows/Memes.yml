@@ -2,7 +2,7 @@ name: Download Memes From Reddit
 
 on:
   schedule:
-    - cron: '0 */2 * * *' # Runs every hour
+    - cron: '0 * * * *' # Runs every hour
   workflow_dispatch: # Allows manual triggering of the workflow
 
 jobs:
@@ -21,7 +21,7 @@ jobs:
       - name: 🧰 Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests
+          pip install --upgrade git+https://github.com/praw-dev/praw.git
 
       - name: 🔄 Restore Cache
         id: cache-restore
@@ -32,17 +32,29 @@ jobs:
 
       - name: ⏬ Download Latest Memes
         id: download-memes
+        env:
+          CLIENT_ID: ${{ secrets.REDDIT_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.REDDIT_CLIENT_SECRET }}
+          USER_AGENT: ${{ secrets.REDDIT_USER_AGENT }}
         run: |
           mkdir -p cache
           touch cache/memes.json
           python - <<EOF
           import os
           import json
-          import requests
+          import praw
 
-          # Reddit API URL
-          url = "https://www.reddit.com/r/memes/new.json"
-          headers = {"User-Agent": "GitHubActionsBot/0.1"}
+          # Environment variables for credentials
+          client_id = os.getenv("CLIENT_ID")
+          client_secret = os.getenv("CLIENT_SECRET")
+          user_agent = os.getenv("USER_AGENT")
+
+          # Initialize Reddit in read-only mode
+          reddit = praw.Reddit(
+              client_id=client_id,
+              client_secret=client_secret,
+              user_agent=user_agent,
+          )
 
           # Load cached URLs
           cache_file = "cache/memes.json"
@@ -52,32 +64,20 @@ jobs:
           except (FileNotFoundError, json.JSONDecodeError):
               cached_urls = set()
 
-          # Fetch data from Reddit
-          response = requests.get(url, headers=headers)
-          response.raise_for_status()
-          data = response.json()
+          # Create a directory for images
+          os.makedirs("cache", exist_ok=True)
 
-          # Extract posts and download new images
+          # Fetch new posts from r/memes
           new_urls = []
-          for post in data["data"]["children"]:
-              post_data = post["data"]
-              title = post_data["title"]
-              author = post_data["author"]
-              upvotes = post_data["ups"]
-              downs = post_data["downs"]
-              image_url = post_data.get("url_overridden_by_dest", "")
-
-              if image_url.endswith((".png", ".jpg", ".jpeg")) and image_url not in cached_urls:
-                  print(f"🎉 New Meme Found:\n  Title: {title}\n  Author: u/{author}\n  Upvotes: {upvotes}\n  Downs: {downs}\n  URL: {image_url}\n")
+          for post in reddit.subreddit("memes").new(limit=10):
+              if post.url.endswith((".png", ".jpg", ".jpeg")) and post.url not in cached_urls:
+                  print(f"🎉 New Meme Found:\n  Title: {post.title}\n  Author: u/{post.author}\n  Upvotes: {post.score}\n  URL: {post.url}\n")
                   
-                  # Save image
-                  image_response = requests.get(image_url)
-                  image_response.raise_for_status()
-                  filename = f"cache/{os.path.basename(image_url)}"
-                  with open(filename, "wb") as img_file:
-                      img_file.write(image_response.content)
-
-                  new_urls.append(image_url)
+                  # Save the image
+                  filename = os.path.join("cache", os.path.basename(post.url))
+                  with open(filename, "wb") as f:
+                      f.write(requests.get(post.url).content)
+                  new_urls.append(post.url)
 
           # Update cache
           cached_urls.update(new_urls)
