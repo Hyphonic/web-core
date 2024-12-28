@@ -43,52 +43,84 @@ jobs:
           python - <<EOF
           import os
           import json
-          import praw
           import requests
-
+          import praw
+          
           # Environment variables for credentials
           client_id = os.getenv("CLIENT_ID")
           client_secret = os.getenv("CLIENT_SECRET")
           user_agent = os.getenv("USER_AGENT")
-
-          # Initialize Reddit in read-only mode
+          
+          print("🔧 DEBUG: Initializing Reddit client in read-only mode...")
           reddit = praw.Reddit(
               client_id=client_id,
               client_secret=client_secret,
               user_agent=user_agent,
           )
-
+          
           # Load cached URLs
           cache_file = "cache/memes.json"
+          print(f"🔧 DEBUG: Loading cached URLs from {cache_file}...")
           try:
               with open(cache_file, "r") as f:
                   cached_urls = set(json.load(f))
-          except (FileNotFoundError, json.JSONDecodeError):
+              print(f"🔧 DEBUG: {len(cached_urls)} cached URLs loaded.")
+          except (FileNotFoundError, json.JSONDecodeError) as e:
+              print(f"⚠️ DEBUG: Cache file not found or invalid. Starting with an empty cache. Error: {e}")
               cached_urls = set()
-
+          
           # Create a directory for images
-          os.makedirs("cache", exist_ok=True)
-
+          image_dir = "cache"
+          os.makedirs(image_dir, exist_ok=True)
+          print(f"🔧 DEBUG: Ensured image directory exists at {image_dir}.")
+          
           # Fetch new posts from r/memes
+          print("🔧 DEBUG: Fetching latest posts from r/memes...")
           new_urls = []
           for post in reddit.subreddit("memes").new(limit=10):
-              if post.url.endswith((".png", ".jpg", ".jpeg")) and post.url not in cached_urls:
-                  print(f"🎉 New Meme Found:\n  Title: {post.title}\n  Author: u/{post.author}\n  Upvotes: {post.score}\n  URL: {post.url}\n")
-                  
-                  # Save the image
-                  filename = os.path.join("cache", os.path.basename(post.url))
-                  with open(filename, "wb") as f:
-                      f.write(requests.get(post.url).content)
-                  new_urls.append(post.url)
-
+              print(f"🔧 DEBUG: Processing post: {post.title} | URL: {post.url}")
+              
+              if post.url not in cached_urls:
+                  try:
+                      print("🔧 DEBUG: Sending HEAD request to validate content type...")
+                      response = requests.head(post.url, allow_redirects=True, timeout=5)
+                      content_type = response.headers.get("Content-Type", "")
+                      print(f"🔧 DEBUG: Content-Type for {post.url} is {content_type}.")
+          
+                      if content_type.startswith("image/"):
+                          print(f"🎉 New Meme Found:\n  Title: {post.title}\n  Author: u/{post.author}\n  Upvotes: {post.score}\n  URL: {post.url}")
+                          
+                          # Save the image
+                          print(f"🔧 DEBUG: Sending GET request to download the image...")
+                          response = requests.get(post.url, timeout=10)
+                          filename = os.path.join(image_dir, os.path.basename(post.url))
+                          with open(filename, "wb") as f:
+                              f.write(response.content)
+                          print(f"✅ Image saved to {filename}.")
+                          new_urls.append(post.url)
+                      else:
+                          print(f"⚠️ Skipping Non-Image URL: {post.url}")
+                  except requests.RequestException as e:
+                      print(f"❌ Failed to Process URL {post.url}. Error: {e}")
+              else:
+                  print(f"⚠️ DEBUG: URL already cached: {post.url}")
+          
           # Update cache
+          print(f"🔧 DEBUG: Updating cache with {len(new_urls)} new URLs...")
           cached_urls.update(new_urls)
           with open(cache_file, "w") as f:
               json.dump(list(cached_urls), f)
-
+          print("✅ Cache updated.")
+          
           if not new_urls:
               print("✨ No New Memes Found!")
+          else:
+              print(f"🎉 {len(new_urls)} new memes downloaded.")
           EOF
+
+      - name: 📜 List All Files
+        run: |
+          tree
 
       - name: 🛠️ Save Artifacts
         if: steps.download-memes.outcome == 'success'
