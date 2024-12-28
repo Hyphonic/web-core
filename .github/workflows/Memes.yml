@@ -36,6 +36,7 @@ jobs:
 
       - name: 📂 Set Up Rclone Config
         run: |
+          mkdir -p ~/.config/rclone
           echo "${{ secrets.PIXELDRAIN_CONF }}" > ~/.config/rclone/rclone.conf
 
       - name: 🔄 Restore Cache
