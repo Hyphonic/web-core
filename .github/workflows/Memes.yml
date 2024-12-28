@@ -34,6 +34,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install praw
 
+      - name: 📂 Set Up Rclone Config
+        run: |
+          echo "${{ secrets.PIXELDRAIN_CONF }}" > ~/.config/rclone/rclone.conf
+
       - name: 🔄 Restore Cache
         id: cache-restore
         uses: actions/cache@v4
@@ -144,6 +148,12 @@ jobs:
       - name: 📜 List All Files
         run: |
           tree
+
+      - name: 🌐 Upload Memes with Rclone
+        run: |
+          rclone copy cache/*.jpeg Pixeldrain:"💯 Memes"
+          rclone copy cache/*.png Pixeldrain:"💯 Memes"
+          rclone copy cache/*.webp Pixeldrain:"💯 Memes"
 
       - name: 🛠️ Save Artifacts
         if: steps.download-memes.outcome == 'success'
