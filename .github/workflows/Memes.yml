@@ -34,6 +34,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install praw
 
+      - name: 🔧 Install Rclone
+        run: |
+          curl https://rclone.org/install.sh | sudo bash
+
       - name: 📂 Set Up Rclone Config
         run: |
           mkdir -p ~/.config/rclone
