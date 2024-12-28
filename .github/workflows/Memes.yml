@@ -93,6 +93,7 @@ jobs:
               with open(cache_file, "r") as f:
                   cached_ids = set(json.load(f))
               debug_log(f"{len(cached_ids)} cached IDs loaded.")
+              debug_log(f"All IDs: {cached_ids}")
           except (FileNotFoundError, json.JSONDecodeError) as e:
               debug_log(f"Cache file not found or invalid. Starting with an empty cache. Error: {e}")
               cached_ids = set()
