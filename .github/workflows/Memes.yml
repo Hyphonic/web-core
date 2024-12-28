@@ -154,14 +154,9 @@ jobs:
         run: |
           tree
 
-      - name: 📑 Create File List for rclone
-        run: |
-          find $(pwd)/cache -type f \( -iname \*.jpeg -o -iname \*.png -o -iname \*.webp \) > filelist.txt
-          cat filelist.txt
-
       - name: 🌐 Upload Memes with Rclone
         run: |
-          rclone copy --files-from=filelist.txt Pixeldrain:"💯 Memes"
+          rclone copy cache Pixeldrain:"💯 Memes"
 
       - name: 🛠️ Save Artifacts
         if: steps.download-memes.outcome == 'success'
