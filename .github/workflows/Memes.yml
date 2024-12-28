@@ -108,42 +108,42 @@ jobs:
           new_ids = []
           valid_image_extensions = ['png', 'jpeg', 'jpg', 'webp']
           for post in reddit.subreddit("memes").new(limit=20):
-              debug_log(f"Processing post: {post.title} | ID: {post.id} | URL: {post.url}")
+          debug_log(f"Processing post: {post.title} | ID: {post.id} | URL: {post.url}")
 
-              # Only process if not cached or if cache check is disabled
-              if disable_cache_check or post.id not in cached_ids:
-                  debug_log(f"Cache check {'disabled' if disable_cache_check else 'enabled'}, processing ID: {post.id}")
-                  try:
-                      debug_log("Sending HEAD request to validate content type...")
-                      response = requests.head(post.url, allow_redirects=True, timeout=5)
-                      content_type = response.headers.get("Content-Type", "")
-                      debug_log(f"Content-Type for {post.url} is {content_type}.")
+          # Only process if not cached or if cache check is disabled
+          if disable_cache_check or post.id not in cached_ids:
+              debug_log(f"Cache check {'disabled' if disable_cache_check else 'enabled'}, processing ID: {post.id}")
+              try:
+                  debug_log("Sending HEAD request to validate content type...")
+                  response = requests.head(post.url, allow_redirects=True, timeout=5)
+                  content_type = response.headers.get("Content-Type", "")
+                  debug_log(f"Content-Type for {post.url} is {content_type}.")
 
-                      # Check for valid image extensions or Content-Type
-                      if content_type.startswith("image/") or any(ext in post.url.lower() for ext in valid_image_extensions):
-                          print(f"🎉 New Meme Found:\n  Title: {post.title}\n  Author: u/{post.author}\n  Upvotes: {post.score}\n  URL: {post.url}")
-                          
-                          # Save the image
-                          debug_log("Sending GET request to download the image...")
-                          response = requests.get(post.url, timeout=10)
-                          filename = os.path.join(image_dir, os.path.basename(post.url))
-                          with open(filename, "wb") as f:
-                              f.write(response.content)
-                          debug_log(f"✅ Image saved to {filename}.")
-                          new_ids.append(post.id)
-                      else:
-                          debug_log(f"⚠️ Skipping Non-Image URL: {post.url}")
-                  except requests.RequestException as e:
-                      debug_log(f"❌ Failed to Process URL {post.url}. Error: {e}")
-              else:
-                  debug_log(f"🔄 Post ID {post.id} has already been seen. Skipping download.")
+                  # Check for valid image extensions or Content-Type
+                  if content_type.startswith("image/") or any(ext in post.url.lower() for ext in valid_image_extensions):
+                      print(f"🎉 New Meme Found:\n  Title: {post.title}\n  Author: u/{post.author}\n  Upvotes: {post.score}\n  URL: {post.url}")
+                      
+                      # Save the image
+                      debug_log("Sending GET request to download the image...")
+                      response = requests.get(post.url, timeout=10)
+                      filename = os.path.join(image_dir, os.path.basename(post.url))
+                      with open(filename, "wb") as f:
+                          f.write(response.content)
+                      debug_log(f"✅ Image saved to {filename}.")
+                      new_ids.append(post.id)
+                  else:
+                      debug_log(f"⚠️ Skipping Non-Image URL: {post.url}")
+              except requests.RequestException as e:
+                  debug_log(f"❌ Failed to Process URL {post.url}. Error: {e}")
+          else:
+              debug_log(f"🔄 Post ID {post.id} has already been seen. Skipping download.")
 
-          # Update cache
+          # After processing all posts, update the cache
           debug_log(f"Updating cache with {len(new_ids)} new IDs...")
           cached_ids.update(new_ids)
           with open(cache_file, "w") as f:
               json.dump(list(cached_ids), f)
-          debug_log("✅ Cache updated.")
+          debug_log(f"✅ Cache updated with IDs: {new_ids}")
 
           if not new_ids:
               print("✨ No New Memes Found!")
