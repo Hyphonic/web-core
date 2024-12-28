@@ -108,7 +108,7 @@ jobs:
           new_ids = []
           valid_image_extensions = ['png', 'jpeg', 'jpg', 'webp']
           for post in reddit.subreddit("memes").new(limit=20):
-          debug_log(f"Processing post: {post.title} | ID: {post.id} | URL: {post.url}")
+            debug_log(f"Processing post: {post.title} | ID: {post.id} | URL: {post.url}")
 
           # Only process if not cached or if cache check is disabled
           if disable_cache_check or post.id not in cached_ids:
