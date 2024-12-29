@@ -249,27 +249,27 @@ jobs:
 
       - name: 📤 Send Meme to Telegram
         run: |
-          python - <<EOF
+          python - <<'EOF'
           import os
           import requests
           import re
-          
+
           # Configuration from environment variables
           BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
           CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
-          
+
           MEME_TYPE = os.getenv('MEME_TYPE')
           MEME_TITLE = os.getenv('MEME_TITLE')
           MEME_AUTHOR = os.getenv('MEME_AUTHOR')
           MEME_UPVOTES = os.getenv('MEME_UPVOTES')
           MEME_URL = os.getenv('MEME_URL')
           MEME_FILENAME = os.getenv('MEME_FILENAME')
-          
+
           def escape_markdown(text):
               """Escapes Markdown-sensitive characters."""
               escape_chars = r"_*[]()~`>#+-=|{}.!"
               return re.sub(f'([{"".join(re.escape(c) for c in escape_chars)}])', r'\\\1', text)
-          
+
           def send_photo():
               url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
               caption = f"""🎉 **New Meme Alert!**
@@ -284,7 +284,7 @@ jobs:
                   response = requests.post(url, files=files, data=data)
               if not response.ok:
                   print(f"⚠️ Failed to send photo: {response.text}")
-          
+
           def send_video():
               url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendVideo"
               caption = f"""🎉 **New Video Meme Alert!**
@@ -299,7 +299,7 @@ jobs:
                   response = requests.post(url, files=files, data=data)
               if not response.ok:
                   print(f"⚠️ Failed to send video: {response.text}")
-          
+
           def main():
               if MEME_TYPE == 'image':
                   send_photo()
@@ -307,7 +307,7 @@ jobs:
                   send_video()
               else:
                   print(f"Unsupported meme type: {MEME_TYPE}")
-          
+
           if __name__ == "__main__":
               main()
           EOF
