@@ -113,7 +113,7 @@ jobs:
           new_ids = []
           valid_exts = ['.png','.jpg','.jpeg','.webp','.gif']
           memes_metadata = []  # List to store meme metadata
-          subreddits = ["memes", "ProgrammerHumor", "dankmemes", "DirtyMemes"]
+          subreddits = ["memes", "ProgrammerHumor", "dankmemes", "DirtyMemes", "rule34", "rareinsults", "futanari"]
 
           for subreddit in subreddits:
               debug_log(f"🔄 Fetching latest posts from r/{subreddit}...")
@@ -137,7 +137,8 @@ jobs:
                                   "author": post.author.name.replace("_", "-") if post.author else "Unknown",
                                   "upvotes": post.ups,
                                   "url": post.url,
-                                  "filename": os.path.basename(post.url)
+                                  "filename": os.path.basename(post.url),
+                                  "subreddit": subreddit
                               }
                               memes_metadata.append(meme_data)
                               
@@ -186,6 +187,15 @@ jobs:
           path: cache/meme_ids.json
           key: meme-ids-cache-${{ env.hash }}
 
+      - name: 📖 Show meme_ids.json After
+        run: |
+          if [ -f cache/meme_ids.json ]; then
+            echo "📄 Contents of meme_ids.json after:"
+            cat cache/meme_ids.json
+          else
+            echo "⚠️ meme_ids.json does not exist after the script runs."
+          fi
+
   send-to-telegram:
     name: 📤 Send Memes to Telegram
     needs: download-memes
@@ -209,4 +219,5 @@ jobs:
             🖋️ *Author:* ${{ matrix.meme.author }}
             👍 *Upvotes:* ${{ matrix.meme.upvotes }}
             🔗 *URL:* [View Post](${{ matrix.meme.url }})
+            🏷️ *Subreddit:* r/${{ matrix.meme.subreddit }}
           photo: cache/${{ matrix.meme.filename }}
