@@ -203,4 +203,5 @@ jobs:
             🖋️ *Author:* ${{ matrix.meme.author }}
             👍 *Upvotes:* ${{ matrix.meme.upvotes }}
             🔗 *URL:* [View Post](${{ matrix.meme.url }})
+            🏷️ *Subreddit:* r/${{ matrix.meme.subreddit }}
           photo: cache/${{ matrix.meme.filename }}
