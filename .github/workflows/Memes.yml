@@ -51,17 +51,21 @@ jobs:
           key: meme-ids-cache-
           restore-keys: |
             meme-ids-cache-
+            
       - name: 🧰 Install Dependencies
         run: |
           python -m pip install --upgrade pip
           pip install praw requests
+
       - name: 🔧 Install Rclone
         run: |
           curl https://rclone.org/install.sh | sudo bash
+
       - name: 📂 Set Up Rclone Config
         run: |
           mkdir -p ~/.config/rclone
           echo "${{ secrets.PIXELDRAIN_CONF }}" > ~/.config/rclone/rclone.conf
+
       - name: ⏬ Download Latest Memes
         id: download-memes
         env:
@@ -78,21 +82,26 @@ jobs:
           import json
           import requests
           import praw
+          
           client_id = os.getenv("CLIENT_ID")
           client_secret = os.getenv("CLIENT_SECRET")
           user_agent = os.getenv("USER_AGENT")
           disable_cache_check = os.getenv("DISABLE_CACHE_CHECK", "false").lower() == "true"
           show_debug = os.getenv("SHOW_DEBUG", "false").lower() == "true"
           post_limit = int(os.getenv("POST_LIMIT", "5"))
+          MEME_LIMIT = 250  # Maximum number of memes to collect
+          
           def debug_log(msg):
               if show_debug:
                   print(f"🛠️ DEBUG: {msg}")
+          
           debug_log("✅ Initializing Reddit client in read-only mode...")
           reddit = praw.Reddit(
               client_id=client_id,
               client_secret=client_secret,
               user_agent=user_agent,
           )
+          
           cache_file = "cache/meme_ids.json"
           debug_log(f"🔍 Loading cached IDs from {cache_file}...")
           try:
@@ -102,25 +111,40 @@ jobs:
           except:
               debug_log("⚠️ No valid cache found.")
               cached_ids = set()
+          
           new_ids = []
-          valid_exts = ['.png','.jpg','.jpeg','.webp','.gif']
+          valid_image_exts = ['.png','.jpg','.jpeg','.webp','.gif']
+          valid_video_exts = ['.mp4', '.webm', '.avi', '.mov']
           memes_metadata = []  # List to store meme metadata
-          subreddits = ["memes", "ProgrammerHumor", "dankmemes", "DirtyMemes", "rule34", "rareinsults", "futanari" ,"HardPornGifs", "funny", "pics", "science", "todayilearned", "porn_gifs"]
+          subreddits = ["memes", "ProgrammerHumor", "dankmemes", "DirtyMemes", "rule34", "rareinsults", "futanari", "HardPornGifs", "funny", "pics", "science", "todayilearned", "porn_gifs"]
+          
+          total_memes = 0
+          
           for subreddit in subreddits:
+              if total_memes >= MEME_LIMIT:
+                  break
               debug_log(f"🔄 Fetching latest posts from r/{subreddit}...")
               for post in reddit.subreddit(subreddit).new(limit=post_limit):
                   if disable_cache_check or post.id not in cached_ids:
                       try:
                           head = requests.head(post.url, allow_redirects=True, timeout=5)
                           ctype = head.headers.get("Content-Type","").lower()
-                          if ctype.startswith("image/") or any(post.url.lower().endswith(e) for e in valid_exts):
+                          is_image = ctype.startswith("image/") or any(post.url.lower().endswith(ext) for ext in valid_image_exts)
+                          is_video = ctype.startswith("video/") or any(post.url.lower().endswith(ext) for ext in valid_video_exts)
+                          
+                          if is_image or is_video:
+                              if total_memes >= MEME_LIMIT:
+                                  break
                               print(f"🎉 New Meme Found: {post.title} | {post.url}")
                               
-                              # Download the image
+                              # Download the media
                               data = requests.get(post.url, timeout=10).content
                               fname = os.path.join("cache", os.path.basename(post.url))
                               with open(fname, "wb") as f:
                                   f.write(data)
+                              
+                              # Determine media type
+                              media_type = "video" if is_video else "image"
                               
                               # Collect metadata for Telegram
                               meme_data = {
@@ -129,13 +153,16 @@ jobs:
                                   "upvotes": post.ups,
                                   "url": post.url,
                                   "filename": os.path.basename(post.url),
-                                  "subreddit": subreddit
+                                  "subreddit": subreddit,
+                                  "type": media_type
                               }
                               memes_metadata.append(meme_data)
                               
                               new_ids.append(post.id)
+                              total_memes += 1
                       except Exception as e:
                           print(f"⚠️ Error processing post {post.id}: {e}")
+          
           if new_ids:
               cached_ids.update(new_ids)
               with open(cache_file, "w") as f:
@@ -143,19 +170,24 @@ jobs:
               print(f"🎉 Downloaded {len(new_ids)} new memes.")
           else:
               print("✨ No New Memes Found!")
+          
           # Save metadata to file for the next steps in the workflow
           with open("cache/memes_metadata.json", "w") as f:
               json.dump(memes_metadata, f, indent=2)
           EOF
+
       - name: 🗂️ Collect Metadata
         id: collect-metadata
         run: |
-          # Compress to single-line JSON
-          metadata=$(jq -c . cache/memes_metadata.json)
+          # Limit to first 250 memes to prevent matrix overflow
+          limited_metadata=$(jq '.[:250]' cache/memes_metadata.json)
+          metadata=$(echo "$limited_metadata" | jq -c .)
           echo "metadata=$metadata" >> $GITHUB_OUTPUT
+
       - name: 🌐 Upload Memes with Rclone
         run: |
-          rclone copy cache Pixeldrain:"💯 Memes" --ignore-times
+          rclone sync cache Pixeldrain:"💯 Memes" --delete-after  # Overwrites existing files
+
       - name: 🔧 Compute Hash of Updated meme_ids.json
         id: compute-hash
         run: |
@@ -166,6 +198,7 @@ jobs:
           fi
           echo "Computed file hash: $FILE_HASH"
           echo "hash=$FILE_HASH" >> $GITHUB_ENV
+
       - name: 💾 Update Meme IDs Cache
         uses: actions/cache@v4
         with:
@@ -183,7 +216,8 @@ jobs:
       - name: 📥 Checkout Code
         uses: actions/checkout@v4
 
-      - name: 📤 Send Meme with Metadata
+      - name: 📤 Send Image Meme
+        if: matrix.meme.type == 'image'
         uses: appleboy/telegram-action@master
         with:
           to: ${{ secrets.TELEGRAM_TO }}
@@ -197,3 +231,19 @@ jobs:
             🔗 *URL:* [View Post](${{ matrix.meme.url }})
             🏷️ *Subreddit:* r/${{ matrix.meme.subreddit }}
           photo: cache/${{ matrix.meme.filename }}
+
+      - name: 📤 Send Video Meme
+        if: matrix.meme.type == 'video'
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_TO }}
+          token: ${{ secrets.TELEGRAM_TOKEN }}
+          format: 'markdown'
+          message: |
+            🎉 **New Video Meme Alert!**
+            📜 *Title:* ${{ matrix.meme.title }}
+            🖋️ *Author:* ${{ matrix.meme.author }}
+            👍 *Upvotes:* ${{ matrix.meme.upvotes }}
+            🔗 *URL:* [View Post](${{ matrix.meme.url }})
+            🏷️ *Subreddit:* r/${{ matrix.meme.subreddit }}
+          video: cache/${{ matrix.meme.filename }}
