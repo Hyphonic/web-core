@@ -127,7 +127,7 @@ jobs:
                           # Collect metadata for Telegram
                           meme_data = {
                               "title": post.title,
-                              "author": post.author.name if post.author else "Unknown",
+                              "author": post.author.name.replace("_", "-") if post.author else "Unknown",
                               "upvotes": post.ups,
                               "url": post.url,
                               "filename": os.path.basename(post.url)
