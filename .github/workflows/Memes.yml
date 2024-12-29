@@ -34,7 +34,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: cache/meme_ids.json
-          key: meme-ids-cache
+          key: meme-ids-cache-
+          restore-keys: |
+            meme-ids-cache-
 
       - name: 📜 Show meme_ids.json Before
         run: |
