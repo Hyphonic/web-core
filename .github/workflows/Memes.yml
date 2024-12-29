@@ -236,6 +236,7 @@ jobs:
           to: ${{ secrets.TELEGRAM_TO }}
           token: ${{ secrets.TELEGRAM_TOKEN }}
           format: 'markdown'
+          debug: true
           message: |
             🎉 **New Meme Alert!**
             📜 *Title:* ${{ matrix.meme.title }}
@@ -253,6 +254,7 @@ jobs:
           to: ${{ secrets.TELEGRAM_TO }}
           token: ${{ secrets.TELEGRAM_TOKEN }}
           format: 'markdown'
+          debug: true
           message: |
             🎉 **New Video Meme Alert!**
             📜 *Title:* ${{ matrix.meme.title }}
