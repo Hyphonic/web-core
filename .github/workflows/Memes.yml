@@ -39,6 +39,15 @@ jobs:
           key: meme-ids-cache-
           restore-keys: |
             meme-ids-cache-
+      
+      - name: 🔧 Compute Hash of Updated meme_ids.json
+        run: |
+          if [ -f cache/meme_ids.json ]; then
+            FILE_HASH=$(sha256sum cache/meme_ids.json | awk '{print $1}')
+          else
+            FILE_HASH="empty-cache"
+          fi
+          echo "Computed file hash: $FILE_HASH"
 
       - name: 📜 Show meme_ids.json Before
         run: |
