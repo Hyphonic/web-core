@@ -264,6 +264,7 @@ jobs:
           MEME_UPVOTES = os.getenv('MEME_UPVOTES')
           MEME_URL = os.getenv('MEME_URL')
           MEME_FILENAME = os.getenv('MEME_FILENAME')
+          MEME_SUBREDDIT = os.getenv('MEME_SUBREDDIT')
 
           def escape_markdown(text):
               """Escapes Markdown-sensitive characters."""
@@ -277,7 +278,7 @@ jobs:
           🖋️ *Author:* {escape_markdown(MEME_AUTHOR)}
           👍 *Upvotes:* {MEME_UPVOTES}
           🔗 *URL:* [View Post]({MEME_URL})
-          🏷️ *Subreddit:* r/subreddit"""
+          🏷️ *Subreddit:* r/{escape_markdown(MEME_SUBREDDIT)}"""
               with open(MEME_FILENAME, 'rb') as photo:
                   files = {'photo': photo}
                   data = {'chat_id': CHAT_ID, 'caption': caption, 'parse_mode': 'Markdown'}
@@ -292,7 +293,7 @@ jobs:
           🖋️ *Author:* {escape_markdown(MEME_AUTHOR)}
           👍 *Upvotes:* {MEME_UPVOTES}
           🔗 *URL:* [View Post]({MEME_URL})
-          🏷️ *Subreddit:* r/subreddit"""
+          🏷️ *Subreddit:* r/{escape_markdown(MEME_SUBREDDIT)}"""
               with open(MEME_FILENAME, 'rb') as video:
                   files = {'video': video}
                   data = {'chat_id': CHAT_ID, 'caption': caption, 'parse_mode': 'Markdown'}
@@ -320,4 +321,5 @@ jobs:
           MEME_UPVOTES: ${{ matrix.meme.upvotes }}
           MEME_URL: ${{ matrix.meme.url }}
           MEME_FILENAME: cache/${{ matrix.meme.filename }}
+          MEME_SUBREDDIT: ${{ matrix.meme.subreddit }}
         continue-on-error: true
