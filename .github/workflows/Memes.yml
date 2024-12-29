@@ -32,7 +32,7 @@ jobs:
           python-version: '3.x'
 
       - name: 🧹 Remove Cache
-      - uses: prantlf/delete-cache-action@v2
+        uses: prantlf/delete-cache-action@v2
         with:
           key: 'meme-ids-cache-'
 
