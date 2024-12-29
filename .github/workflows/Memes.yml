@@ -83,42 +83,28 @@ jobs:
           import requests
           import praw
           import yt_dlp
-          import re
-
-          def escape_markdown(text):
-              """Escapes Markdown-sensitive characters."""
-              escape_chars = r"_*[]()~`>#+-=|{}.!"
-              return re.sub(f'([{"".join(re.escape(c) for c in escape_chars)}])', r'\\\1', text)
-
           client_id = os.getenv("CLIENT_ID")
           client_secret = os.getenv("CLIENT_SECRET")
           user_agent = os.getenv("USER_AGENT")
           disable_cache_check = os.getenv("DISABLE_CACHE_CHECK", "false").lower() == "true"
           show_debug = os.getenv("SHOW_DEBUG", "false").lower() == "true"
           post_limit = int(os.getenv("POST_LIMIT", "5"))
-          MEME_LIMIT = 250  # Maximum number of memes to collect
-
+          MEME_LIMIT = 250  # Maximum number of items to collect
           def debug_log(msg):
               if show_debug:
                   print(f"🛠️ DEBUG: {msg}")
-
-          debug_log("✅ Initializing Reddit client in read-only mode...")
           reddit = praw.Reddit(
               client_id=client_id,
               client_secret=client_secret,
               user_agent=user_agent,
           )
-
           cache_file = "cache/meme_ids.json"
           try:
               with open(cache_file, "r") as f:
                   cached_ids = set(json.load(f))
-              debug_log(f"{len(cached_ids)} cached IDs loaded.")
           except:
-              debug_log("⚠️ No valid cache found.")
               cached_ids = set()
-
-          valid_image_exts = ['.png', '.jpg', '.jpeg', '.webp', '.gif']
+          valid_image_exts = ['.png','.jpg','.jpeg','.webp','.gif']
           subreddits = [
               "memes", "ProgrammerHumor", "dankmemes", "DirtyMemes",
               "rule34", "rareinsults", "futanari", "HardPornGifs",
@@ -128,11 +114,9 @@ jobs:
           total_memes = 0
           new_ids = []
           memes_metadata = []
-
           for subreddit in subreddits:
               if total_memes >= MEME_LIMIT:
                   break
-              debug_log(f"🔄 Fetching latest posts from r/{subreddit}...")
               for post in reddit.subreddit(subreddit).new(limit=post_limit):
                   if not disable_cache_check and post.id in cached_ids:
                       continue
@@ -143,12 +127,12 @@ jobs:
                           r = requests.get(post.url, timeout=10)
                           r.raise_for_status()
                           out_fname = os.path.join("cache", f"{post.id}{ext}")
-                          with open(out_fname, "wb") as f_img:
-                              f_img.write(r.content)
+                          with open(out_fname, "wb") as f:
+                              f.write(r.content)
                           memes_metadata.append({
                               "id": post.id,
-                              "title": escape_markdown(post.title),
-                              "author": escape_markdown(str(post.author) if post.author else "Unknown"),
+                              "title": post.title,
+                              "author": str(post.author) if post.author else "Unknown",
                               "subreddit": str(post.subreddit),
                               "upvotes": post.ups,
                               "filename": os.path.basename(out_fname),
@@ -163,9 +147,7 @@ jobs:
                               'outtmpl': outtmpl,
                               'quiet': not show_debug,
                               'no_warnings': True,
-                              'ignoreerrors': True,
-                              'format': 'bestvideo+bestaudio/best',
-                              'merge_output_format': 'mp4',
+                              'ignoreerrors': True
                           }
                           with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                               ydl.download([post.url])
@@ -175,15 +157,10 @@ jobs:
                                   downloaded_file = os.path.join("cache", file)
                                   break
                           if downloaded_file:
-                              # Check file size (Telegram limit: 50MB)
-                              file_size = os.path.getsize(downloaded_file)
-                              if file_size > 50 * 1024 * 1024:
-                                  print(f"⚠️ Video {downloaded_file} exceeds 50MB. Skipping.")
-                                  continue
                               memes_metadata.append({
                                   "id": post.id,
-                                  "title": escape_markdown(post.title),
-                                  "author": escape_markdown(str(post.author) if post.author else "Unknown"),
+                                  "title": post.title,
+                                  "author": str(post.author) if post.author else "Unknown",
                                   "subreddit": str(post.subreddit),
                                   "upvotes": post.ups,
                                   "filename": os.path.basename(downloaded_file),
@@ -195,17 +172,15 @@ jobs:
                               print(f"⚠️ Post {post.id}: Could not save as image or video - skipping.")
                   except Exception as e:
                       print(f"⚠️ Error processing post {post.id}: {e}")
-
           if new_ids:
               cached_ids.update(new_ids)
-              with open(cache_file, "w") as f_cache:
-                  json.dump(sorted(cached_ids), f_cache)
+              with open(cache_file, "w") as f:
+                  json.dump(sorted(cached_ids), f)
               print(f"🎉 Downloaded {len(new_ids)} new items.")
           else:
-              print("✨ No New Memes Found!")
-
-          with open("cache/memes_metadata.json", "w") as f_meta:
-              json.dump(memes_metadata, f_meta, indent=2)
+              print("✨ No New Items Found!")
+          with open("cache/memes_metadata.json", "w") as f:
+              json.dump(memes_metadata, f, indent=2)
           EOF
 
       - name: 🗂️ Collect Metadata
