@@ -218,6 +218,10 @@ jobs:
           path: cache/meme_ids.json
           key: meme-ids-cache-${{ env.hash }}
 
+      - name: 📜 List All Files
+        run: |
+          tree
+
   send-to-telegram:
     name: 📤 Send Memes to Telegram
     needs: download-memes
