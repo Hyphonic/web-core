@@ -31,6 +31,11 @@ jobs:
         with:
           python-version: '3.x'
 
+      - name: 🧹 Remove Cache
+      - uses: prantlf/delete-cache-action@v2
+        with:
+          key: 'meme-ids-cache-'
+
       - name: 🚀 Restore Meme IDs Cache
         id: restore-cache
         uses: actions/cache@v4
@@ -39,24 +44,6 @@ jobs:
           key: meme-ids-cache-
           restore-keys: |
             meme-ids-cache-
-      
-      - name: 🔧 Compute Hash of Updated meme_ids.json
-        run: |
-          if [ -f cache/meme_ids.json ]; then
-            FILE_HASH=$(sha256sum cache/meme_ids.json | awk '{print $1}')
-          else
-            FILE_HASH="empty-cache"
-          fi
-          echo "Computed file hash: $FILE_HASH"
-
-      - name: 📜 Show meme_ids.json Before
-        run: |
-          if [ -f cache/meme_ids.json ]; then
-            echo "📄 Contents of meme_ids.json before:"
-            cat cache/meme_ids.json
-          else
-            echo "⚠️ meme_ids.json does not exist before the script runs."
-          fi
 
       - name: 🧰 Install Dependencies
         run: |
