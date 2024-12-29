@@ -32,9 +32,10 @@ jobs:
           python-version: '3.x'
 
       - name: 🧹 Remove Cache
-        uses: prantlf/delete-cache-action@v2
+        uses: DareFox/delete-cache-by-key@v1
         with:
-          key: 'meme-ids-cache-'
+          key: meme-ids-cache-
+          mode: exact
 
       - name: 🚀 Restore Meme IDs Cache
         id: restore-cache
