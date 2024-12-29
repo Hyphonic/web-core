@@ -2,7 +2,7 @@ name: Download Memes From Reddit
 
 on:
   schedule:
-    - cron: '*/20 * * * *'
+    - cron: '*/15 * * * *'
   workflow_dispatch:
     inputs:
       disable_cache_check:
@@ -15,6 +15,11 @@ on:
         required: false
         default: false
         type: boolean
+      post_limit:
+        description: 'Number of posts to fetch from each subreddit'
+        required: false
+        default: '5'
+        type: string
 
 jobs:
   download-memes:
@@ -68,6 +73,7 @@ jobs:
           USER_AGENT: ${{ secrets.REDDIT_USER_AGENT }}
           DISABLE_CACHE_CHECK: ${{ github.event.inputs.disable_cache_check }}
           SHOW_DEBUG: ${{ github.event.inputs.show_debug }}
+          POST_LIMIT: ${{ github.event.inputs.post_limit }}
         run: |
           mkdir -p cache
           python - <<EOF
@@ -75,66 +81,70 @@ jobs:
           import json
           import requests
           import praw
-          
+
           client_id = os.getenv("CLIENT_ID")
           client_secret = os.getenv("CLIENT_SECRET")
           user_agent = os.getenv("USER_AGENT")
           disable_cache_check = os.getenv("DISABLE_CACHE_CHECK", "false").lower() == "true"
           show_debug = os.getenv("SHOW_DEBUG", "false").lower() == "true"
-          
+          post_limit = int(os.getenv("POST_LIMIT", "5"))
+
           def debug_log(msg):
               if show_debug:
                   print(f"🛠️ DEBUG: {msg}")
-          
+
           debug_log("✅ Initializing Reddit client in read-only mode...")
           reddit = praw.Reddit(
               client_id=client_id,
               client_secret=client_secret,
               user_agent=user_agent,
           )
-          
+
           cache_file = "cache/meme_ids.json"
           debug_log(f"🔍 Loading cached IDs from {cache_file}...")
           try:
               with open(cache_file, "r") as f:
                   cached_ids = set(json.load(f))
-              debug_log(f"{len(cached_ids)} cached_ids loaded.")
+              debug_log(f"{len(cached_ids)} cached IDs loaded.")
           except:
               debug_log("⚠️ No valid cache found.")
               cached_ids = set()
-          
+
           new_ids = []
           valid_exts = ['.png','.jpg','.jpeg','.webp','.gif']
           memes_metadata = []  # List to store meme metadata
-          
-          for post in reddit.subreddit("memes").new(limit=20):
-              if disable_cache_check or post.id not in cached_ids:
-                  try:
-                      head = requests.head(post.url, allow_redirects=True, timeout=5)
-                      ctype = head.headers.get("Content-Type","").lower()
-                      if ctype.startswith("image/") or any(post.url.lower().endswith(e) for e in valid_exts):
-                          print(f"🎉 New Meme Found: {post.title} | {post.url}")
-                          
-                          # Download the image
-                          data = requests.get(post.url, timeout=10).content
-                          fname = os.path.join("cache", os.path.basename(post.url))
-                          with open(fname, "wb") as f:
-                              f.write(data)
-                          
-                          # Collect metadata for Telegram
-                          meme_data = {
-                              "title": post.title,
-                              "author": post.author.name.replace("_", "-") if post.author else "Unknown",
-                              "upvotes": post.ups,
-                              "url": post.url,
-                              "filename": os.path.basename(post.url)
-                          }
-                          memes_metadata.append(meme_data)
-                          
-                          new_ids.append(post.id)
-                  except Exception as e:
-                      print(f"⚠️ Error processing post {post.id}: {e}")
-          
+          subreddits = ["memes", "ProgrammerHumor", "dankmemes", "DirtyMemes"]
+
+          for subreddit in subreddits:
+              debug_log(f"🔄 Fetching latest posts from r/{subreddit}...")
+              for post in reddit.subreddit(subreddit).new(limit=post_limit):
+                  if disable_cache_check or post.id not in cached_ids:
+                      try:
+                          head = requests.head(post.url, allow_redirects=True, timeout=5)
+                          ctype = head.headers.get("Content-Type","").lower()
+                          if ctype.startswith("image/") or any(post.url.lower().endswith(e) for e in valid_exts):
+                              print(f"🎉 New Meme Found: {post.title} | {post.url}")
+                              
+                              # Download the image
+                              data = requests.get(post.url, timeout=10).content
+                              fname = os.path.join("cache", os.path.basename(post.url))
+                              with open(fname, "wb") as f:
+                                  f.write(data)
+                              
+                              # Collect metadata for Telegram
+                              meme_data = {
+                                  "title": post.title,
+                                  "author": post.author.name.replace("_", "-") if post.author else "Unknown",
+                                  "upvotes": post.ups,
+                                  "url": post.url,
+                                  "filename": os.path.basename(post.url)
+                              }
+                              memes_metadata.append(meme_data)
+                              
+                              new_ids.append(post.id)
+                      except Exception as e:
+                          print(f"⚠️ Error processing post {post.id}: {e}")
+
           if new_ids:
               cached_ids.update(new_ids)
               with open(cache_file, "w") as f:
@@ -142,7 +152,7 @@ jobs:
               print(f"🎉 Downloaded {len(new_ids)} new memes.")
           else:
               print("✨ No New Memes Found!")
-          
+
           # Save metadata to file for the next steps in the workflow
           with open("cache/memes_metadata.json", "w") as f:
               json.dump(memes_metadata, f, indent=2)
@@ -175,15 +185,6 @@ jobs:
         with:
           path: cache/meme_ids.json
           key: meme-ids-cache-${{ env.hash }}
-
-      - name: 📖 Show meme_ids.json After
-        run: |
-          if [ -f cache/meme_ids.json ]; then
-            echo "📄 Contents of meme_ids.json after:"
-            cat cache/meme_ids.json
-          else
-            echo "⚠️ meme_ids.json does not exist after the script runs."
-          fi
 
   send-to-telegram:
     name: 📤 Send Memes to Telegram
