@@ -37,9 +37,11 @@ jobs:
           python-version: '3.x'
 
       - name: 🧹 Remove Cache
-        uses: prantlf/delete-cache-action@v2
+        uses: DareFox/delete-cache-by-key@v1
         with:
           key: meme-ids-cache-
+          mode: exact
+        continue-on-error: true
 
       - name: 🚀 Restore Meme IDs Cache
         id: restore-cache
@@ -49,21 +51,17 @@ jobs:
           key: meme-ids-cache-
           restore-keys: |
             meme-ids-cache-
-
       - name: 🧰 Install Dependencies
         run: |
           python -m pip install --upgrade pip
           pip install praw requests
-
       - name: 🔧 Install Rclone
         run: |
           curl https://rclone.org/install.sh | sudo bash
-
       - name: 📂 Set Up Rclone Config
         run: |
           mkdir -p ~/.config/rclone
           echo "${{ secrets.PIXELDRAIN_CONF }}" > ~/.config/rclone/rclone.conf
-
       - name: ⏬ Download Latest Memes
         id: download-memes
         env:
@@ -80,25 +78,21 @@ jobs:
           import json
           import requests
           import praw
-
           client_id = os.getenv("CLIENT_ID")
           client_secret = os.getenv("CLIENT_SECRET")
           user_agent = os.getenv("USER_AGENT")
           disable_cache_check = os.getenv("DISABLE_CACHE_CHECK", "false").lower() == "true"
           show_debug = os.getenv("SHOW_DEBUG", "false").lower() == "true"
           post_limit = int(os.getenv("POST_LIMIT", "5"))
-
           def debug_log(msg):
               if show_debug:
                   print(f"🛠️ DEBUG: {msg}")
-
           debug_log("✅ Initializing Reddit client in read-only mode...")
           reddit = praw.Reddit(
               client_id=client_id,
               client_secret=client_secret,
               user_agent=user_agent,
           )
-
           cache_file = "cache/meme_ids.json"
           debug_log(f"🔍 Loading cached IDs from {cache_file}...")
           try:
@@ -108,12 +102,10 @@ jobs:
           except:
               debug_log("⚠️ No valid cache found.")
               cached_ids = set()
-
           new_ids = []
           valid_exts = ['.png','.jpg','.jpeg','.webp','.gif']
           memes_metadata = []  # List to store meme metadata
           subreddits = ["memes", "ProgrammerHumor", "dankmemes", "DirtyMemes"]
-
           for subreddit in subreddits:
               debug_log(f"🔄 Fetching latest posts from r/{subreddit}...")
               for post in reddit.subreddit(subreddit).new(limit=post_limit):
@@ -144,7 +136,6 @@ jobs:
                               new_ids.append(post.id)
                       except Exception as e:
                           print(f"⚠️ Error processing post {post.id}: {e}")
-
           if new_ids:
               cached_ids.update(new_ids)
               with open(cache_file, "w") as f:
@@ -152,23 +143,19 @@ jobs:
               print(f"🎉 Downloaded {len(new_ids)} new memes.")
           else:
               print("✨ No New Memes Found!")
-
           # Save metadata to file for the next steps in the workflow
           with open("cache/memes_metadata.json", "w") as f:
               json.dump(memes_metadata, f, indent=2)
           EOF
-
       - name: 🗂️ Collect Metadata
         id: collect-metadata
         run: |
           # Compress to single-line JSON
           metadata=$(jq -c . cache/memes_metadata.json)
           echo "metadata=$metadata" >> $GITHUB_OUTPUT
-
       - name: 🌐 Upload Memes with Rclone
         run: |
           rclone copy cache Pixeldrain:"💯 Memes"
-
       - name: 🔧 Compute Hash of Updated meme_ids.json
         id: compute-hash
         run: |
@@ -179,7 +166,6 @@ jobs:
           fi
           echo "Computed file hash: $FILE_HASH"
           echo "hash=$FILE_HASH" >> $GITHUB_ENV
-
       - name: 💾 Update Meme IDs Cache
         uses: actions/cache@v4
         with:
@@ -194,7 +180,6 @@ jobs:
           else
             echo "⚠️ meme_ids.json does not exist after the script runs."
           fi
-
   send-to-telegram:
     name: 📤 Send Memes to Telegram
     needs: download-memes
