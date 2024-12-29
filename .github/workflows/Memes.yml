@@ -20,6 +20,8 @@ jobs:
   download-memes:
     name: 🌐 Download Memes
     runs-on: ubuntu-latest
+    outputs:
+      metadata: ${{ steps.collect-metadata.outputs.metadata }}
     steps:
       - name: 📥 Checkout Code
         uses: actions/checkout@v4
@@ -76,31 +78,38 @@ jobs:
           import json
           import requests
           import praw
+          
           client_id = os.getenv("CLIENT_ID")
           client_secret = os.getenv("CLIENT_SECRET")
           user_agent = os.getenv("USER_AGENT")
           disable_cache_check = os.getenv("DISABLE_CACHE_CHECK", "false").lower() == "true"
           show_debug = os.getenv("SHOW_DEBUG", "false").lower() == "true"
+          
           def debug_log(msg):
               if show_debug:
                   print(f"🛠️ DEBUG: {msg}")
+          
           debug_log("✅ Initializing Reddit client in read-only mode...")
           reddit = praw.Reddit(
               client_id=client_id,
               client_secret=client_secret,
               user_agent=user_agent,
           )
+          
           cache_file = "cache/meme_ids.json"
           debug_log(f"🔍 Loading cached IDs from {cache_file}...")
           try:
               with open(cache_file, "r") as f:
                   cached_ids = set(json.load(f))
-              debug_log(f"{len(cached_ids)} cached IDs loaded.")
+              debug_log(f"{len(cached_ids)} cached_ids loaded.")
           except:
               debug_log("⚠️ No valid cache found.")
               cached_ids = set()
+          
           new_ids = []
           valid_exts = ['.png','.jpg','.jpeg','.webp','.gif']
+          memes_metadata = []  # List to store meme metadata
+          
           for post in reddit.subreddit("memes").new(limit=20):
               if disable_cache_check or post.id not in cached_ids:
                   try:
@@ -108,13 +117,27 @@ jobs:
                       ctype = head.headers.get("Content-Type","").lower()
                       if ctype.startswith("image/") or any(post.url.lower().endswith(e) for e in valid_exts):
                           print(f"🎉 New Meme Found: {post.title} | {post.url}")
+                          
+                          # Download the image
                           data = requests.get(post.url, timeout=10).content
                           fname = os.path.join("cache", os.path.basename(post.url))
                           with open(fname, "wb") as f:
                               f.write(data)
+                          
+                          # Collect metadata for Telegram
+                          meme_data = {
+                              "title": post.title,
+                              "author": post.author.name if post.author else "Unknown",
+                              "upvotes": post.ups,
+                              "url": post.url,
+                              "filename": os.path.basename(post.url)
+                          }
+                          memes_metadata.append(meme_data)
+                          
                           new_ids.append(post.id)
-                  except:
-                      pass
+                  except Exception as e:
+                      print(f"⚠️ Error processing post {post.id}: {e}")
+          
           if new_ids:
               cached_ids.update(new_ids)
               with open(cache_file, "w") as f:
@@ -122,23 +145,21 @@ jobs:
               print(f"🎉 Downloaded {len(new_ids)} new memes.")
           else:
               print("✨ No New Memes Found!")
+          
+          # Save metadata to file for the next steps in the workflow
+          with open("cache/memes_metadata.json", "w") as f:
+              json.dump(memes_metadata, f, indent=2)
           EOF
+
+      - name: 🗂️ Collect Metadata
+        id: collect-metadata
+        run: |
+          metadata=$(cat cache/memes_metadata.json)
+          echo "metadata=$metadata" >> $GITHUB_OUTPUT
 
       - name: 🌐 Upload Memes with Rclone
         run: |
           rclone copy cache Pixeldrain:"💯 Memes"
-      # 3) Save images as usual
-      - name: 🛠️ Save Artifacts (Images)
-        if: steps.download-memes.outcome == 'success'
-        uses: actions/upload-artifact@v4
-        with:
-          name: memes
-          path: |
-            cache/*.jpg
-            cache/*.jpeg
-            cache/*.png
-            cache/*.webp
-            cache/*.gif
 
       - name: 🔧 Compute Hash of Updated meme_ids.json
         id: compute-hash
@@ -150,7 +171,6 @@ jobs:
           fi
           echo "Computed file hash: $FILE_HASH"
           echo "hash=$FILE_HASH" >> $GITHUB_ENV
-          echo "🔍 Debug: Computed cache key hash is '${{ env.hash }}'"
 
       - name: 💾 Update Meme IDs Cache
         uses: actions/cache@v4
@@ -166,3 +186,27 @@ jobs:
           else
             echo "⚠️ meme_ids.json does not exist after the script runs."
           fi
+
+  send-to-telegram:
+    name: 📤 Send Memes to Telegram
+    needs: download-memes
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        meme: ${{ fromJson(needs.download-memes.outputs.metadata) }}
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 📤 Send Meme with Metadata
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_TO }}
+          token: ${{ secrets.TELEGRAM_TOKEN }}
+          message: |
+            🎉 **New Meme Alert!**
+            📜 *Title:* ${{ matrix.meme.title }}
+            🖋️ *Author:* ${{ matrix.meme.author }}
+            👍 *Upvotes:* ${{ matrix.meme.upvotes }}
+            🔗 *URL:* [View Post](${{ matrix.meme.url }})
+          photo: cache/${{ matrix.meme.filename }}
