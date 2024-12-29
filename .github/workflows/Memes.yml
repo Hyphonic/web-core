@@ -22,7 +22,8 @@ on:
         type: string
 
 permissions:
-  actions: write
+  contents: read
+  packages: write
 
 jobs:
   download-memes:
