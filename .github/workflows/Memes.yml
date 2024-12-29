@@ -37,7 +37,7 @@ jobs:
           python-version: '3.x'
 
       - name: 🧹 Remove Cache
-        uses: koki-develop/cache-delete-action@v1
+        uses: prantlf/delete-cache-action@v2
         with:
           key: meme-ids-cache-
 
