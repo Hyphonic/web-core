@@ -23,9 +23,6 @@ jobs:
     steps:
       - name: 📥 Checkout Code
         uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          persist-credentials: false
 
       - name: 📦 Set Up Python
         uses: actions/setup-python@v5
@@ -33,13 +30,13 @@ jobs:
           python-version: '3.x'
 
       - name: 🚀 Restore Meme IDs Cache
-        uses: actions/cache@v3
+        id: restore-cache
+        uses: actions/cache@v4
         with:
           path: cache/meme_ids.json
           key: meme-ids-cache
 
-      # Added Step: Show meme_ids.json Before Running Python Script
-      - name: 📖 Show meme_ids.json Before
+      - name: 📜 Show meme_ids.json Before
         run: |
           if [ -f cache/meme_ids.json ]; then
             echo "📄 Contents of meme_ids.json before:"
@@ -77,27 +74,22 @@ jobs:
           import json
           import requests
           import praw
-
           client_id = os.getenv("CLIENT_ID")
           client_secret = os.getenv("CLIENT_SECRET")
           user_agent = os.getenv("USER_AGENT")
           disable_cache_check = os.getenv("DISABLE_CACHE_CHECK", "false").lower() == "true"
           show_debug = os.getenv("SHOW_DEBUG", "false").lower() == "true"
-
           def debug_log(msg):
               if show_debug:
                   print(f"🛠️ DEBUG: {msg}")
-
           debug_log("✅ Initializing Reddit client in read-only mode...")
           reddit = praw.Reddit(
               client_id=client_id,
               client_secret=client_secret,
               user_agent=user_agent,
           )
-
           cache_file = "cache/meme_ids.json"
           debug_log(f"🔍 Loading cached IDs from {cache_file}...")
-
           try:
               with open(cache_file, "r") as f:
                   cached_ids = set(json.load(f))
@@ -105,7 +97,6 @@ jobs:
           except:
               debug_log("⚠️ No valid cache found.")
               cached_ids = set()
-
           new_ids = []
           valid_exts = ['.png','.jpg','.jpeg','.webp','.gif']
           for post in reddit.subreddit("memes").new(limit=20):
@@ -122,7 +113,6 @@ jobs:
                           new_ids.append(post.id)
                   except:
                       pass
-
           if new_ids:
               cached_ids.update(new_ids)
               with open(cache_file, "w") as f:
@@ -132,23 +122,9 @@ jobs:
               print("✨ No New Memes Found!")
           EOF
 
-      # Added Step: Show meme_ids.json After Running Python Script
-      - name: 📖 Show meme_ids.json After
-        run: |
-          if [ -f cache/meme_ids.json ]; then
-            echo "📄 Contents of meme_ids.json after:"
-            cat cache/meme_ids.json
-          else
-            echo "⚠️ meme_ids.json does not exist after the script runs."
-          fi
-
-      - name: 📜 List All Files
-        run: tree
-
       - name: 🌐 Upload Memes with Rclone
         run: |
           rclone copy cache Pixeldrain:"💯 Memes"
-
       # 3) Save images as usual
       - name: 🛠️ Save Artifacts (Images)
         if: steps.download-memes.outcome == 'success'
@@ -162,9 +138,29 @@ jobs:
             cache/*.webp
             cache/*.gif
 
+      - name: 🔧 Compute Hash of Updated meme_ids.json
+        id: compute-hash
+        run: |
+          if [ -f cache/meme_ids.json ]; then
+            FILE_HASH=$(sha256sum cache/meme_ids.json | awk '{print $1}')
+          else
+            FILE_HASH="empty-cache"
+          fi
+          echo "Computed file hash: $FILE_HASH"
+          echo "hash=$FILE_HASH" >> $GITHUB_ENV
+          echo "🔍 Debug: Computed cache key hash is '${{ env.hash }}'"
+
       - name: 💾 Update Meme IDs Cache
-        if: always()
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: cache/meme_ids.json
-          key: meme-ids-cache
+          key: meme-ids-cache-${{ env.hash }}
+
+      - name: 📖 Show meme_ids.json After
+        run: |
+          if [ -f cache/meme_ids.json ]; then
+            echo "📄 Contents of meme_ids.json after:"
+            cat cache/meme_ids.json
+          else
+            echo "⚠️ meme_ids.json does not exist after the script runs."
+          fi
