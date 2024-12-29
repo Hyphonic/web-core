@@ -252,11 +252,14 @@ jobs:
           python - <<'EOF'
           import os
           import re
+          import asyncio
           from telegram import Bot
 
+          # Bot config from environment
           BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
           CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
+          # Meme config from environment
           MEME_TYPE = os.getenv('MEME_TYPE')
           MEME_TITLE = os.getenv('MEME_TITLE')
           MEME_AUTHOR = os.getenv('MEME_AUTHOR')
@@ -266,9 +269,11 @@ jobs:
           MEME_SUBREDDIT = os.getenv('MEME_SUBREDDIT')
 
           def escape_markdown(text):
+              """Escapes some Markdown-sensitive characters."""
               escape_chars = r"_*[]()~`>#+-=|{}.!"
               return re.sub(f'([{"".join(re.escape(c) for c in escape_chars)}])', r'\\\1', text)
 
+          # Caption text (retaining emojis/body text)
           caption_photo = f"""🎉 **New Meme Alert!**
           📜 *Title:* {escape_markdown(MEME_TITLE)}
           🖋️ *Author:* {escape_markdown(MEME_AUTHOR)}
@@ -283,34 +288,39 @@ jobs:
           🔗 *URL:* [View Post]({MEME_URL})
           🏷️ *Subreddit:* r/{escape_markdown(MEME_SUBREDDIT)}"""
 
-          bot = Bot(token=BOT_TOKEN)
+          async def send_photo_async(bot: Bot, path: str, caption: str):
+              with open(path, 'rb') as img:
+                  await bot.send_photo(
+                      chat_id=CHAT_ID,
+                      photo=img,
+                      caption=caption,
+                      parse_mode='Markdown',
+                  )
 
-          def main():
+          async def send_video_async(bot: Bot, path: str, caption: str):
+              with open(path, 'rb') as vid:
+                  await bot.send_video(
+                      chat_id=CHAT_ID,
+                      video=vid,
+                      caption=caption,
+                      parse_mode='Markdown',
+                      supports_streaming=True
+                  )
+
+          async def main():
+              bot = Bot(token=BOT_TOKEN)
               if MEME_TYPE == 'image':
-                  with open(MEME_FILENAME, 'rb') as img:
-                      bot.send_photo(
-                          chat_id=CHAT_ID,
-                          photo=img,
-                          caption=caption_photo,
-                          parse_mode='Markdown',
-                      )
+                  await send_photo_async(bot, MEME_FILENAME, caption_photo)
                   print("Photo sent successfully!")
               elif MEME_TYPE == 'video':
-                  with open(MEME_FILENAME, 'rb') as vid:
-                      bot.send_video(
-                          chat_id=CHAT_ID,
-                          video=vid,
-                          caption=caption_video,
-                          parse_mode='Markdown',
-                          supports_streaming=True
-                      )
+                  await send_video_async(bot, MEME_FILENAME, caption_video)
                   print("Video sent successfully!")
               else:
                   print(f"Unsupported meme type: {MEME_TYPE}")
 
-          if __name__ == "__main__":
+          if __name__ == '__main__':
               try:
-                  main()
+                  asyncio.run(main())
               except Exception as e:
                   print(f"Error sending meme: {e}")
           EOF
