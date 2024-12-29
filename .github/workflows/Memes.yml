@@ -37,10 +37,9 @@ jobs:
           python-version: '3.x'
 
       - name: 🧹 Remove Cache
-        uses: DareFox/delete-cache-by-key@v1
+        uses: koki-develop/cache-delete-action@v1
         with:
           key: meme-ids-cache-
-          mode: exact
 
       - name: 🚀 Restore Meme IDs Cache
         id: restore-cache
