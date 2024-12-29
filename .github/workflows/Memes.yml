@@ -72,8 +72,8 @@ jobs:
           CLIENT_SECRET: ${{ secrets.REDDIT_CLIENT_SECRET }}
           USER_AGENT: ${{ secrets.REDDIT_USER_AGENT }}
           DISABLE_CACHE_CHECK: ${{ github.event.inputs.disable_cache_check }}
-          SHOW_DEBUG: ${{ github.event.inputs.show_debug }}
-          POST_LIMIT: ${{ github.event.inputs.post_limit }}
+          SHOW_DEBUG: ${{ github.event.inputs.show_debug || true }}
+          POST_LIMIT: ${{ github.event.inputs.post_limit || '5' }}
         run: |
           mkdir -p cache
           python - <<EOF
@@ -113,7 +113,7 @@ jobs:
           new_ids = []
           valid_exts = ['.png','.jpg','.jpeg','.webp','.gif']
           memes_metadata = []  # List to store meme metadata
-          subreddits = ["memes", "ProgrammerHumor", "dankmemes", "DirtyMemes", "rule34", "rareinsults", "futanari"]
+          subreddits = ["memes", "ProgrammerHumor", "dankmemes", "DirtyMemes"]
 
           for subreddit in subreddits:
               debug_log(f"🔄 Fetching latest posts from r/{subreddit}...")
@@ -219,5 +219,4 @@ jobs:
             🖋️ *Author:* ${{ matrix.meme.author }}
             👍 *Upvotes:* ${{ matrix.meme.upvotes }}
             🔗 *URL:* [View Post](${{ matrix.meme.url }})
-            🏷️ *Subreddit:* r/${{ matrix.meme.subreddit }}
           photo: cache/${{ matrix.meme.filename }}
