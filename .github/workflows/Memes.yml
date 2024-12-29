@@ -186,7 +186,7 @@ jobs:
 
       - name: 🌐 Upload Memes with Rclone
         run: |
-          rclone sync cache Pixeldrain:"💯 Memes" --delete-after  # Overwrites existing files
+          rclone copy cache Pixeldrain:"💯 Memes"
 
       - name: 🔧 Compute Hash of Updated meme_ids.json
         id: compute-hash
