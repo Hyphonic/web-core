@@ -1,4 +1,4 @@
-name: Download Memes From Reddit
+name: ⏬ Download Memes
 
 on:
   schedule:
@@ -20,6 +20,9 @@ on:
         required: false
         default: '5'
         type: string
+
+permissions:
+  actions: write
 
 jobs:
   download-memes:
@@ -180,6 +183,28 @@ jobs:
           else
             echo "⚠️ meme_ids.json does not exist after the script runs."
           fi
+
+      - name: 📊 Count Memes
+        id: count-memes
+        run: |
+          meme_count=$(jq length cache/memes_metadata.json)
+          echo "count=$meme_count" >> $GITHUB_OUTPUT
+
+      - name: 🔧 Update Workflow Run Name
+        if: steps.count-memes.outputs.count != '0'
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const memeCount = '${{ steps.count-memes.outputs.count }}';
+            const runName = `⏬ Download Memes - ${memeCount} Meme${memeCount !== '1' ? 's' : ''}`;
+            await github.actions.updateWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.runId,
+              name: runName
+            });
+      
   send-to-telegram:
     name: 📤 Send Memes to Telegram
     needs: download-memes
