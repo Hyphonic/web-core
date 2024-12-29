@@ -21,10 +21,6 @@ on:
         default: '5'
         type: string
 
-permissions:
-  contents: read
-  packages: write
-
 jobs:
   download-memes:
     name: 🌐 Download Memes
@@ -176,36 +172,6 @@ jobs:
           path: cache/meme_ids.json
           key: meme-ids-cache-${{ env.hash }}
 
-      - name: 📖 Show meme_ids.json After
-        run: |
-          if [ -f cache/meme_ids.json ]; then
-            echo "📄 Contents of meme_ids.json after:"
-            cat cache/meme_ids.json
-          else
-            echo "⚠️ meme_ids.json does not exist after the script runs."
-          fi
-
-      - name: 📊 Count Memes
-        id: count-memes
-        run: |
-          meme_count=$(jq length cache/memes_metadata.json)
-          echo "count=$meme_count" >> $GITHUB_OUTPUT
-
-      - name: 🔧 Update Workflow Run Name
-        if: steps.count-memes.outputs.count != '0'
-        uses: actions/github-script@v6
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const memeCount = '${{ steps.count-memes.outputs.count }}';
-            const runName = `⏬ Download Memes - ${memeCount} Meme${memeCount !== '1' ? 's' : ''}`;
-            await github.actions.updateWorkflowRun({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              run_id: context.runId,
-              name: runName
-            });
-      
   send-to-telegram:
     name: 📤 Send Memes to Telegram
     needs: download-memes
