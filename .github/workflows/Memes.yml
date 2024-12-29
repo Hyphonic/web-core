@@ -154,7 +154,8 @@ jobs:
       - name: 🗂️ Collect Metadata
         id: collect-metadata
         run: |
-          metadata=$(cat cache/memes_metadata.json)
+          # Compress to single-line JSON
+          metadata=$(jq -c . cache/memes_metadata.json)
           echo "metadata=$metadata" >> $GITHUB_OUTPUT
 
       - name: 🌐 Upload Memes with Rclone
