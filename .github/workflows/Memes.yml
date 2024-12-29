@@ -66,7 +66,7 @@ jobs:
           mkdir -p ~/.config/rclone
           echo "${{ secrets.PIXELDRAIN_CONF }}" > ~/.config/rclone/rclone.conf
 
-      - name: ⏬ Download Latest Memes
+      - name: ⏬ Download Reddit Posts
         id: download-memes
         env:
           CLIENT_ID: ${{ secrets.REDDIT_CLIENT_ID }}
@@ -83,6 +83,12 @@ jobs:
           import requests
           import praw
           import yt_dlp
+          import re
+
+          def escape_markdown(text):
+              """Escapes Markdown-sensitive characters."""
+              escape_chars = r"_*[]()~`>#+-=|{}.!"
+              return re.sub(f'([{"".join(re.escape(c) for c in escape_chars)}])', r'\\\1', text)
 
           client_id = os.getenv("CLIENT_ID")
           client_secret = os.getenv("CLIENT_SECRET")
@@ -90,12 +96,13 @@ jobs:
           disable_cache_check = os.getenv("DISABLE_CACHE_CHECK", "false").lower() == "true"
           show_debug = os.getenv("SHOW_DEBUG", "false").lower() == "true"
           post_limit = int(os.getenv("POST_LIMIT", "5"))
-          MEME_LIMIT = 250  # Maximum number of items to collect
+          MEME_LIMIT = 250  # Maximum number of memes to collect
 
           def debug_log(msg):
               if show_debug:
                   print(f"🛠️ DEBUG: {msg}")
 
+          debug_log("✅ Initializing Reddit client in read-only mode...")
           reddit = praw.Reddit(
               client_id=client_id,
               client_secret=client_secret,
@@ -106,10 +113,12 @@ jobs:
           try:
               with open(cache_file, "r") as f:
                   cached_ids = set(json.load(f))
+              debug_log(f"{len(cached_ids)} cached IDs loaded.")
           except:
+              debug_log("⚠️ No valid cache found.")
               cached_ids = set()
 
-          valid_image_exts = ['.png','.jpg','.jpeg','.webp','.gif']
+          valid_image_exts = ['.png', '.jpg', '.jpeg', '.webp', '.gif']
           subreddits = [
               "memes", "ProgrammerHumor", "dankmemes", "DirtyMemes",
               "rule34", "rareinsults", "futanari", "HardPornGifs",
@@ -123,6 +132,7 @@ jobs:
           for subreddit in subreddits:
               if total_memes >= MEME_LIMIT:
                   break
+              debug_log(f"🔄 Fetching latest posts from r/{subreddit}...")
               for post in reddit.subreddit(subreddit).new(limit=post_limit):
                   if not disable_cache_check and post.id in cached_ids:
                       continue
@@ -133,12 +143,12 @@ jobs:
                           r = requests.get(post.url, timeout=10)
                           r.raise_for_status()
                           out_fname = os.path.join("cache", f"{post.id}{ext}")
-                          with open(out_fname, "wb") as f:
-                              f.write(r.content)
+                          with open(out_fname, "wb") as f_img:
+                              f_img.write(r.content)
                           memes_metadata.append({
                               "id": post.id,
-                              "title": post.title,
-                              "author": str(post.author) if post.author else "Unknown",
+                              "title": escape_markdown(post.title),
+                              "author": escape_markdown(str(post.author) if post.author else "Unknown"),
                               "subreddit": str(post.subreddit),
                               "upvotes": post.ups,
                               "filename": os.path.basename(out_fname),
@@ -153,7 +163,9 @@ jobs:
                               'outtmpl': outtmpl,
                               'quiet': not show_debug,
                               'no_warnings': True,
-                              'ignoreerrors': True
+                              'ignoreerrors': True,
+                              'format': 'bestvideo+bestaudio/best',
+                              'merge_output_format': 'mp4',
                           }
                           with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                               ydl.download([post.url])
@@ -163,10 +175,15 @@ jobs:
                                   downloaded_file = os.path.join("cache", file)
                                   break
                           if downloaded_file:
+                              # Check file size (Telegram limit: 50MB)
+                              file_size = os.path.getsize(downloaded_file)
+                              if file_size > 50 * 1024 * 1024:
+                                  print(f"⚠️ Video {downloaded_file} exceeds 50MB. Skipping.")
+                                  continue
                               memes_metadata.append({
                                   "id": post.id,
-                                  "title": post.title,
-                                  "author": str(post.author) if post.author else "Unknown",
+                                  "title": escape_markdown(post.title),
+                                  "author": escape_markdown(str(post.author) if post.author else "Unknown"),
                                   "subreddit": str(post.subreddit),
                                   "upvotes": post.ups,
                                   "filename": os.path.basename(downloaded_file),
@@ -181,19 +198,20 @@ jobs:
 
           if new_ids:
               cached_ids.update(new_ids)
-              with open(cache_file, "w") as f:
-                  json.dump(sorted(cached_ids), f)
+              with open(cache_file, "w") as f_cache:
+                  json.dump(sorted(cached_ids), f_cache)
               print(f"🎉 Downloaded {len(new_ids)} new items.")
           else:
-              print("✨ No New Items Found!")
+              print("✨ No New Memes Found!")
 
-          with open("cache/memes_metadata.json", "w") as f:
-              json.dump(memes_metadata, f, indent=2)
+          with open("cache/memes_metadata.json", "w") as f_meta:
+              json.dump(memes_metadata, f_meta, indent=2)
           EOF
 
       - name: 🗂️ Collect Metadata
         id: collect-metadata
         run: |
+          # Limit to first 250 memes to prevent matrix overflow
           limited_metadata=$(jq '.[:250]' cache/memes_metadata.json)
           metadata=$(echo "$limited_metadata" | jq -c .)
           echo "metadata=$metadata" >> $GITHUB_OUTPUT
@@ -222,6 +240,12 @@ jobs:
         run: |
           tree
 
+      - name: 📤 Upload Cache as Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: cache
+          path: cache/
+
   send-to-telegram:
     name: 📤 Send Memes to Telegram
     needs: download-memes
@@ -233,19 +257,92 @@ jobs:
       - name: 📥 Checkout Code
         uses: actions/checkout@v4
 
-      - name: 📤 Send Telegram Notification Without Files
-        uses: DiyRex/tgsend@v1.2
+      - name: 📤 Download Cache Artifact
+        uses: actions/download-artifact@v3
         with:
-          bot_token: ${{ secrets.TELEGRAM_TOKEN }}
-          chat_id: ${{ secrets.TELEGRAM_TO }}
-          message: |
-            🎉 **New Meme Alert!**
-            📜 *Title:* ${{ matrix.meme.title }}
-            🖋️ *Author:* ${{ matrix.meme.author }}
-            👍 *Upvotes:* ${{ matrix.meme.upvotes }}
-            🔗 *URL:* [View Post](${{ matrix.meme.url }})
-            🏷️ *Subreddit:* r/${{ matrix.meme.subreddit }}
-          markdown: 'true' # Enable Markdown parsing
-          files: |
-            cache/${{ matrix.meme.filename }}
+          name: cache
+          path: cache/
+
+      - name: 📦 Set Up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: 🧰 Install Dependencies for Telegram
+        run: |
+          pip install requests
+
+      - name: 📤 Send Meme to Telegram
+        run: |
+          python - <<EOF
+          import os
+          import requests
+          import re
+          
+          # Configuration from environment variables
+          BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+          CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
+          
+          MEME_TYPE = os.getenv('MEME_TYPE')
+          MEME_TITLE = os.getenv('MEME_TITLE')
+          MEME_AUTHOR = os.getenv('MEME_AUTHOR')
+          MEME_UPVOTES = os.getenv('MEME_UPVOTES')
+          MEME_URL = os.getenv('MEME_URL')
+          MEME_FILENAME = os.getenv('MEME_FILENAME')
+          
+          def escape_markdown(text):
+              """Escapes Markdown-sensitive characters."""
+              escape_chars = r"_*[]()~`>#+-=|{}.!"
+              return re.sub(f'([{"".join(re.escape(c) for c in escape_chars)}])', r'\\\1', text)
+          
+          def send_photo():
+              url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
+              caption = f"""🎉 **New Meme Alert!**
+          📜 *Title:* {escape_markdown(MEME_TITLE)}
+          🖋️ *Author:* {escape_markdown(MEME_AUTHOR)}
+          👍 *Upvotes:* {MEME_UPVOTES}
+          🔗 *URL:* [View Post]({MEME_URL})
+          🏷️ *Subreddit:* r/subreddit"""
+              with open(MEME_FILENAME, 'rb') as photo:
+                  files = {'photo': photo}
+                  data = {'chat_id': CHAT_ID, 'caption': caption, 'parse_mode': 'Markdown'}
+                  response = requests.post(url, files=files, data=data)
+              if not response.ok:
+                  print(f"⚠️ Failed to send photo: {response.text}")
+          
+          def send_video():
+              url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendVideo"
+              caption = f"""🎉 **New Video Meme Alert!**
+          📜 *Title:* {escape_markdown(MEME_TITLE)}
+          🖋️ *Author:* {escape_markdown(MEME_AUTHOR)}
+          👍 *Upvotes:* {MEME_UPVOTES}
+          🔗 *URL:* [View Post]({MEME_URL})
+          🏷️ *Subreddit:* r/subreddit"""
+              with open(MEME_FILENAME, 'rb') as video:
+                  files = {'video': video}
+                  data = {'chat_id': CHAT_ID, 'caption': caption, 'parse_mode': 'Markdown'}
+                  response = requests.post(url, files=files, data=data)
+              if not response.ok:
+                  print(f"⚠️ Failed to send video: {response.text}")
+          
+          def main():
+              if MEME_TYPE == 'image':
+                  send_photo()
+              elif MEME_TYPE == 'video':
+                  send_video()
+              else:
+                  print(f"Unsupported meme type: {MEME_TYPE}")
+          
+          if __name__ == "__main__":
+              main()
+          EOF
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_TO }}
+          MEME_TYPE: ${{ matrix.meme.type }}
+          MEME_TITLE: ${{ matrix.meme.title }}
+          MEME_AUTHOR: ${{ matrix.meme.author }}
+          MEME_UPVOTES: ${{ matrix.meme.upvotes }}
+          MEME_URL: ${{ matrix.meme.url }}
+          MEME_FILENAME: cache/${{ matrix.meme.filename }}
         continue-on-error: true
