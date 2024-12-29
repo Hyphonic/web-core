@@ -116,7 +116,7 @@ jobs:
           valid_image_exts = ['.png','.jpg','.jpeg','.webp','.gif']
           valid_video_exts = ['.mp4', '.webm', '.avi', '.mov']
           memes_metadata = []  # List to store meme metadata
-          subreddits = ["memes", "ProgrammerHumor", "dankmemes", "DirtyMemes", "rule34", "rareinsults", "futanari", "HardPornGifs", "funny", "pics", "science", "todayilearned", "porn_gifs"]
+          subreddits = ["memes", "ProgrammerHumor", "dankmemes", "DirtyMemes", "rule34", "rareinsults", "futanari", "HardPornGifs", "funny", "pics", "science", "todayilearned", "porn_gifs", "MemeVideos", "Showerthoughts"]
           
           total_memes = 0
           
