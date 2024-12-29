@@ -155,7 +155,7 @@ jobs:
           echo "metadata=$metadata" >> $GITHUB_OUTPUT
       - name: 🌐 Upload Memes with Rclone
         run: |
-          rclone copy cache Pixeldrain:"💯 Memes"
+          rclone copy cache Pixeldrain:"💯 Memes" --ignore-times
       - name: 🔧 Compute Hash of Updated meme_ids.json
         id: compute-hash
         run: |
