@@ -105,7 +105,7 @@ jobs:
           new_ids = []
           valid_exts = ['.png','.jpg','.jpeg','.webp','.gif']
           memes_metadata = []  # List to store meme metadata
-          subreddits = ["memes", "ProgrammerHumor", "dankmemes", "DirtyMemes"]
+          subreddits = ["memes", "ProgrammerHumor", "dankmemes", "DirtyMemes", "rule34", "rareinsults", "futanari" ,"HardPornGifs", "funny", "pics", "science", "todayilearned", "porn_gifs"]
           for subreddit in subreddits:
               debug_log(f"🔄 Fetching latest posts from r/{subreddit}...")
               for post in reddit.subreddit(subreddit).new(limit=post_limit):
