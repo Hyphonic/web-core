@@ -171,7 +171,7 @@ jobs:
                             'quiet': True,
                             'no_warnings': True,               # Suppresses warnings
                             'ignoreerrors': True,              # Continues on download errors
-                            'format': '[filesize<=20M]',
+                            'format': 'best[filesize<=20M]',
                             'merge_output_format': 'mp4',      # Merges into mp4 format
                             'no-progress': True,               # Disables the progress bar
                             'loglevel': 'error'                # Sets log level to show only errors
