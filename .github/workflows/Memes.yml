@@ -305,18 +305,18 @@ jobs:
           def build_caption(meme):
               if meme['type'] == 'image':
                   return f"""🎉 **New Meme Alert!**
-                      📜 *Title:* {escape_markdown(meme.get('title', 'No Title'))}
-                      🖋️ *Author:* {escape_markdown(meme.get('author', 'Unknown'))}
-                      👍 *Upvotes:* {meme.get('upvotes', '0')}
-                      🔗 *URL:* [View Post]({meme.get('url', '')})
-                      🏷️ *Subreddit:* r/{escape_markdown(meme.get('subreddit', '?'))}"""
+                  📜 *Title:* {escape_markdown(meme.get('title', 'No Title'))}
+                  🖋️ *Author:* {escape_markdown(meme.get('author', 'Unknown'))}
+                  👍 *Upvotes:* {meme.get('upvotes', '0')}
+                  🔗 *URL:* [View Post]({meme.get('url', '')})
+                  🏷️ *Subreddit:* r/{escape_markdown(meme.get('subreddit', '?'))}"""
               else:
                   return f"""🎉 **New Video Meme Alert!**
-                      📜 *Title:* {escape_markdown(meme.get('title', 'No Title'))}
-                      🖋️ *Author:* {escape_markdown(meme.get('author', 'Unknown'))}
-                      👍 *Upvotes:* {meme.get('upvotes', '0')}
-                      🔗 *URL:* [View Post]({meme.get('url', '')})
-                      🏷️ *Subreddit:* r/{escape_markdown(meme.get('subreddit', '?'))}"""
+                  📜 *Title:* {escape_markdown(meme.get('title', 'No Title'))}
+                  🖋️ *Author:* {escape_markdown(meme.get('author', 'Unknown'))}
+                  👍 *Upvotes:* {meme.get('upvotes', '0')}
+                  🔗 *URL:* [View Post]({meme.get('url', '')})
+                  🏷️ *Subreddit:* r/{escape_markdown(meme.get('subreddit', '?'))}"""
 
           async def send_meme_async(bot, meme):
               file_path = os.path.join('cache', meme['filename'])
