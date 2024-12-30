@@ -54,19 +54,19 @@ jobs:
 
       - name: 🧰 Install Dependencies
         run: |
-          echo "🐍 [DEBUG] Upgrading pip..."
+          echo "🐍 Upgrading pip..."
           python -m pip install --upgrade pip
-          echo "📦 [DEBUG] Installing PRAW, Requests, and yt_dlp..."
+          echo "📦 Installing PRAW, Requests, and yt_dlp..."
           pip install praw requests yt-dlp
 
       - name: 🔧 Install Rclone
         run: |
-          echo "🔄 [DEBUG] Installing Rclone..."
+          echo "🔄 Installing Rclone..."
           curl https://rclone.org/install.sh | sudo bash
 
       - name: 📂 Set Up Rclone Config
         run: |
-          echo "📁 [DEBUG] Setting up Rclone configuration..."
+          echo "📁 Setting up Rclone configuration..."
           mkdir -p ~/.config/rclone
           echo "${{ secrets.PIXELDRAIN_CONF }}" > ~/.config/rclone/rclone.conf
 
@@ -80,7 +80,7 @@ jobs:
           SHOW_DEBUG: ${{ github.event.inputs.show_debug || true }}
           POST_LIMIT: ${{ github.event.inputs.post_limit || '5' }}
         run: |
-          echo "🚀 [DEBUG] Starting meme download process..."
+          echo "🚀 Starting meme download process..."
           mkdir -p cache
           python - <<EOF
           import os
@@ -99,7 +99,7 @@ jobs:
 
           def debug_log(msg):
               if show_debug:
-                  print(f"🎯 [DEBUG] {msg}")
+                  print(msg)
 
           reddit = praw.Reddit(
               client_id=client_id,
@@ -113,23 +113,12 @@ jobs:
               with open(cache_file, "r") as f:
                   cached_ids = set(json.load(f))
               debug_log("📂 Loaded cached meme IDs.")
-              debug_log(f"📜 Cache: {cached_ids}")
           except:
               cached_ids = set()
               debug_log("⚠️ No cache found. Starting fresh.")
 
           valid_image_exts = ['.png','.jpg','.jpeg','.webp','.gif']
-          subreddits = [
-              "Memes", "ProgrammerHumor", "DankMemes", "DirtyMemes",
-              "Rule34", "RareInsults", "Futanari", "HardPornGifs",
-              "Funny", "Science", "TodayILearned",
-              "Porn_Gifs", "MemeVideos", "Hentai", "Boobs", "Pussy", "MeIRL",
-              "Gifs", "Aww", "Videos", "AskReddit", "HolUp", "WTF", "Hmmm", "CoolGuides",
-              "Unexpected", "Hentai_GIF", "HorseCockFuta", "FutanariGifs",
-              "Yiff", "TrapHentai", "Fnafpornrp", "Futanari_Comics", "FutaCum",
-              "Overwatch_Porn", "3DHentai", "MyLittlePony", "FurryPornSubreddit",
-              "3DHentai", "SweatyPalms", "SpreadSmile", "Pranks"
-          ]
+          subreddits = ["Memes", "ProgrammerHumor", "DankMemes", "DirtyMemes", "RareInsults", "Funny", "Science", "TodayILearned", "MemeVideos", "MeIRL", "Gifs", "Aww", "Videos", "AskReddit", "HolUp", "WTF", "Hmmm", "CoolGuides", "Unexpected", "SweatyPalms", "SpreadSmile", "Pranks"]
           total_memes = 0
           new_ids = []
           memes_metadata = []
@@ -172,7 +161,7 @@ jobs:
                             'quiet': True,
                             'no_warnings': True,               # Suppresses warnings
                             'ignoreerrors': True,              # Continues on download errors
-                            'format': 'best[filesize<=20M]',
+                            'format': 'best',
                             'merge_output_format': 'mp4',      # Merges into mp4 format
                             'no-progress': True,               # Disables the progress bar
                             'loglevel': 'error'                # Sets log level to show only errors
@@ -218,29 +207,29 @@ jobs:
       - name: 🗂️ Collect Metadata
         id: collect-metadata
         run: |
-          echo "📊 [DEBUG] Collecting metadata..."
+          echo "📊 Collecting metadata..."
           # Limit to first 250 memes to prevent matrix overflow
           limited_metadata=$(jq '.[:250]' cache/memes_metadata.json)
           metadata=$(echo "$limited_metadata" | jq -c .)
           echo "metadata=$metadata" >> $GITHUB_OUTPUT
-          echo "✅ [DEBUG] Metadata collection complete."
+          echo "✅ Metadata collection complete."
 
       - name: 🌐 Upload Memes with Rclone
         run: |
-          echo "🔄 [DEBUG] Uploading memes to Pixeldrain with Rclone..."
+          echo "🔄 Uploading memes to Pixeldrain with Rclone..."
           rclone copy cache Pixeldrain:"💯 Memes"
-          echo "✅ [DEBUG] Upload complete."
+          echo "✅ Upload complete."
 
       - name: 🔧 Compute Hash of Updated meme_ids.json
         id: compute-hash
         run: |
-          echo "🔍 [DEBUG] Computing hash of meme_ids.json..."
+          echo "🔍 Computing hash of meme_ids.json..."
           if [ -f cache/meme_ids.json ]; then
             FILE_HASH=$(sha256sum cache/meme_ids.json | awk '{print $1}')
-            echo "🔑 [DEBUG] Computed hash: $FILE_HASH"
+            echo "🔑 Computed hash: $FILE_HASH"
           else
             FILE_HASH="empty-cache"
-            echo "⚠️ [DEBUG] meme_ids.json not found. Using default hash."
+            echo "⚠️ meme_ids.json not found. Using default hash."
           fi
           echo "hash=$FILE_HASH" >> $GITHUB_ENV
 
@@ -252,9 +241,9 @@ jobs:
 
       - name: 📜 List All Files
         run: |
-          echo "📂 [DEBUG] Listing all files in cache..."
+          echo "📂 Listing all files in cache..."
           tree
-          echo "✅ [DEBUG] File listing complete."
+          echo "✅ File listing complete."
 
       - name: 📤 Upload Cache as Artifact
         uses: actions/upload-artifact@v4
@@ -283,13 +272,13 @@ jobs:
 
       - name: 🧰 Install Python Dependencies
         run: |
-          echo "📦 [DEBUG] Installing python-telegram-bot..."
+          echo "📦 Installing python-telegram-bot..."
           pip install python-telegram-bot
-          echo "✅ [DEBUG] Python dependencies installed."
+          echo "✅ Python dependencies installed."
 
       - name: 📤 Send Memes in One Script
         run: |
-          echo "📤 [DEBUG] Starting to send memes to Telegram..."
+          echo "📤 Starting to send memes to Telegram..."
           python - <<'EOF'
           import os
           import re
@@ -312,14 +301,12 @@ jobs:
           📜 *Title:* {escape_markdown(meme.get('title', 'No Title'))}
           🖋️ *Author:* {escape_markdown(meme.get('author', 'Unknown'))}
           👍 *Upvotes:* {meme.get('upvotes', '0')}
-          🔗 *URL:* [View Post]({meme.get('url', '')})
           🏷️ *Subreddit:* r/{escape_markdown(meme.get('subreddit', '?'))}"""
               else:
                   return f"""🎉 **New Video Meme Alert!**
           📜 *Title:* {escape_markdown(meme.get('title', 'No Title'))}
           🖋️ *Author:* {escape_markdown(meme.get('author', 'Unknown'))}
           👍 *Upvotes:* {meme.get('upvotes', '0')}
-          🔗 *URL:* [View Post]({meme.get('url', '')})
           🏷️ *Subreddit:* r/{escape_markdown(meme.get('subreddit', '?'))}"""
 
           async def send_meme_async(bot, meme):
@@ -333,7 +320,7 @@ jobs:
                           caption=caption,
                           parse_mode='Markdown'
                       )
-                      print(f"📷 [DEBUG] Sent image meme ID: {meme['id']}")
+                      print(f"📷 Sent image meme ID: {meme['id']}")
               elif meme['type'] == 'video':
                   with open(file_path, 'rb') as vid:
                       await bot.send_video(
@@ -343,31 +330,31 @@ jobs:
                           parse_mode='Markdown',
                           supports_streaming=True
                       )
-                      print(f"🎥 [DEBUG] Sent video meme ID: {meme['id']}")
+                      print(f"🎥 Sent video meme ID: {meme['id']}")
 
           async def main():
               bot = Bot(token=BOT_TOKEN)
               if not os.path.exists(METADATA_FILE):
-                  print("⚠️ [DEBUG] No metadata file found. Nothing to send.")
+                  print("⚠️ No metadata file found. Nothing to send.")
                   return
 
               with open(METADATA_FILE, 'r') as f:
                   memes = json.load(f)
-              print(f"📚 [DEBUG] Loaded {len(memes)} memes from metadata.")
+              print(f"📚 Loaded {len(memes)} memes from metadata.")
 
               for meme in memes:
                   try:
                       await send_meme_async(bot, meme)
                   except Exception as e:
-                      print(f"❌ [DEBUG] Failed to send meme ID {meme['id']}: {e}")
+                      print(f"❌ Failed to send meme ID {meme['id']}: {e}")
 
-              print("✅ [DEBUG] All memes have been processed.")
+              print("✅ All memes have been processed.")
 
           if __name__ == '__main__':
               try:
                   asyncio.run(main())
               except Exception as e:
-                  print(f"❌ [DEBUG] Error sending memes in batch: {e}")
+                  print(f"❌ Error sending memes in batch: {e}")
           EOF
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
