@@ -113,6 +113,7 @@ jobs:
               with open(cache_file, "r") as f:
                   cached_ids = set(json.load(f))
               debug_log("📂 Loaded cached meme IDs.")
+              debug_log(f"📜 Cache: {cached_ids}")
           except:
               cached_ids = set()
               debug_log("⚠️ No cache found. Starting fresh.")
