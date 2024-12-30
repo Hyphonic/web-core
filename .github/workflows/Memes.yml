@@ -227,20 +227,17 @@ jobs:
           tree
 
       - name: 📤 Upload Cache as Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: cache
           path: cache/
 
   send-to-telegram:
-    name: 📤 Send Memes to Telegram
     needs: download-memes
+    name: 📤 Send All Memes to Telegram
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        meme: ${{ fromJson(needs.download-memes.outputs.metadata) }}
     steps:
-      - name: 📥 Checkout Code
+      - name: 📥 Check Out Repository
         uses: actions/checkout@v4
 
       - name: 📤 Download Cache Artifact
@@ -258,91 +255,84 @@ jobs:
         run: |
           pip install python-telegram-bot
 
-      - name: 📤 Send Meme via python-telegram-bot
+      - name: 📤 Send Memes in One Script
         run: |
           python - <<'EOF'
           import os
           import re
+          import json
           import asyncio
           from telegram import Bot
 
-          # Bot config from environment
           BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
           CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
-
-          # Meme config from environment
-          MEME_TYPE = os.getenv('MEME_TYPE')
-          MEME_TITLE = os.getenv('MEME_TITLE')
-          MEME_AUTHOR = os.getenv('MEME_AUTHOR')
-          MEME_UPVOTES = os.getenv('MEME_UPVOTES')
-          MEME_URL = os.getenv('MEME_URL')
-          MEME_FILENAME = os.getenv('MEME_FILENAME')
-          MEME_SUBREDDIT = os.getenv('MEME_SUBREDDIT')
+          METADATA_FILE = 'cache/memes_metadata.json'
 
           def escape_markdown(text):
-              """Escapes some Markdown-sensitive characters."""
+              """Escapes Markdown-sensitive characters."""
               escape_chars = r"_*[]()~`>#+-=|{}.!"
               return re.sub(f'([{"".join(re.escape(c) for c in escape_chars)}])', r'\\\1', text)
 
-          # Caption text (retaining emojis/body text)
-          caption_photo = f"""🎉 **New Meme Alert!**
-          📜 *Title:* {escape_markdown(MEME_TITLE)}
-          🖋️ *Author:* {escape_markdown(MEME_AUTHOR)}
-          👍 *Upvotes:* {MEME_UPVOTES}
-          🔗 *URL:* [View Post]({MEME_URL})
-          🏷️ *Subreddit:* r/{escape_markdown(MEME_SUBREDDIT)}"""
+          def build_caption(meme):
+              if meme['type'] == 'image':
+                  return f"""🎉 **New Meme Alert!**
+          📜 *Title:* {escape_markdown(meme.get('title', 'No Title'))}
+          🖋️ *Author:* {escape_markdown(meme.get('author', 'Unknown'))}
+          👍 *Upvotes:* {meme.get('upvotes', '0')}
+          🔗 *URL:* [View Post]({meme.get('url', '')})
+          🏷️ *Subreddit:* r/{escape_markdown(meme.get('subreddit', '?'))}"""
+              else:
+                  return f"""🎉 **New Video Meme Alert!**
+          📜 *Title:* {escape_markdown(meme.get('title', 'No Title'))}
+          🖋️ *Author:* {escape_markdown(meme.get('author', 'Unknown'))}
+          👍 *Upvotes:* {meme.get('upvotes', '0')}
+          🔗 *URL:* [View Post]({meme.get('url', '')})
+          🏷️ *Subreddit:* r/{escape_markdown(meme.get('subreddit', '?'))}"""
 
-          caption_video = f"""🎉 **New Video Meme Alert!**
-          📜 *Title:* {escape_markdown(MEME_TITLE)}
-          🖋️ *Author:* {escape_markdown(MEME_AUTHOR)}
-          👍 *Upvotes:* {MEME_UPVOTES}
-          🔗 *URL:* [View Post]({MEME_URL})
-          🏷️ *Subreddit:* r/{escape_markdown(MEME_SUBREDDIT)}"""
-
-          async def send_photo_async(bot: Bot, path: str, caption: str):
-              with open(path, 'rb') as img:
-                  await bot.send_photo(
-                      chat_id=CHAT_ID,
-                      photo=img,
-                      caption=caption,
-                      parse_mode='Markdown',
-                  )
-
-          async def send_video_async(bot: Bot, path: str, caption: str):
-              with open(path, 'rb') as vid:
-                  await bot.send_video(
-                      chat_id=CHAT_ID,
-                      video=vid,
-                      caption=caption,
-                      parse_mode='Markdown',
-                      supports_streaming=True
-                  )
+          async def send_meme_async(bot, meme):
+              file_path = os.path.join('cache', meme['filename'])
+              caption = build_caption(meme)
+              if meme['type'] == 'image':
+                  with open(file_path, 'rb') as img:
+                      await bot.send_photo(
+                          chat_id=CHAT_ID,
+                          photo=img,
+                          caption=caption,
+                          parse_mode='Markdown'
+                      )
+              elif meme['type'] == 'video':
+                  with open(file_path, 'rb') as vid:
+                      await bot.send_video(
+                          chat_id=CHAT_ID,
+                          video=vid,
+                          caption=caption,
+                          parse_mode='Markdown',
+                          supports_streaming=True
+                      )
 
           async def main():
               bot = Bot(token=BOT_TOKEN)
-              if MEME_TYPE == 'image':
-                  await send_photo_async(bot, MEME_FILENAME, caption_photo)
-                  print("Photo sent successfully!")
-              elif MEME_TYPE == 'video':
-                  await send_video_async(bot, MEME_FILENAME, caption_video)
-                  print("Video sent successfully!")
-              else:
-                  print(f"Unsupported meme type: {MEME_TYPE}")
+              if not os.path.exists(METADATA_FILE):
+                  print("No metadata file found. Nothing to send.")
+                  return
+
+              with open(METADATA_FILE, 'r') as f:
+                  memes = json.load(f)
+
+              for meme in memes:
+                  try:
+                      await send_meme_async(bot, meme)
+                      print(f"Sent {meme['type']} with ID: {meme['id']}")
+                  except Exception as e:
+                      print(f"Failed to send {meme['id']}: {e}")
 
           if __name__ == '__main__':
               try:
                   asyncio.run(main())
               except Exception as e:
-                  print(f"Error sending meme: {e}")
+                  print(f"Error sending memes in batch: {e}")
           EOF
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_TO }}
-          MEME_TYPE: ${{ matrix.meme.type }}
-          MEME_TITLE: ${{ matrix.meme.title }}
-          MEME_AUTHOR: ${{ matrix.meme.author }}
-          MEME_UPVOTES: ${{ matrix.meme.upvotes }}
-          MEME_URL: ${{ matrix.meme.url }}
-          MEME_FILENAME: cache/${{ matrix.meme.filename }}
-          MEME_SUBREDDIT: ${{ matrix.meme.subreddit }}
         continue-on-error: true
