@@ -166,12 +166,14 @@ jobs:
                           debug_log(f"🎥 Found potential video post: {post.id}")
                           outtmpl = f"cache/{post.id}.%(ext)s"
                           ydl_opts = {
-                              'outtmpl': outtmpl,
-                              'quiet': not show_debug,
-                              'no_warnings': True,
-                              'ignoreerrors': True,
-                              'format': 'bestvideo+bestaudio/best',
-                              'merge_output_format': 'mp4',
+                            'outtmpl': outtmpl,
+                            'quiet': not show_debug,            # Keeps quiet when not in debug mode
+                            'no_warnings': True,               # Suppresses warnings
+                            'ignoreerrors': True,              # Continues on download errors
+                            'format': 'bestvideo+bestaudio/best',  # Selects the best video and audio
+                            'merge_output_format': 'mp4',      # Merges into mp4 format
+                            'no-progress': True,               # Disables the progress bar
+                            'loglevel': 'error',                # Sets log level to show only errors
                           }
                           with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                               ydl.download([post.url])
