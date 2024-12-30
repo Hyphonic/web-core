@@ -97,9 +97,31 @@ jobs:
           post_limit = int(os.getenv("POST_LIMIT", "5"))
           MEME_LIMIT = 250
 
-          def debug_log(msg):
-              if show_debug:
-                  print(msg)
+          def debug_log(msg, level="INFO"):
+              RESET = "\033[0m"
+              GREEN = "\033[92m"
+              YELLOW = "\033[93m"
+              RED = "\033[91m"
+              UNDERLINE = "\033[4m"
+              WHITE = "\033[97m"
+              
+              if level == "INFO":
+                  color = GREEN
+                  prefix = f"{color}INFO{RESET}"
+              elif level == "WARNING":
+                  color = YELLOW
+                  prefix = f"{color}WARNING{RESET}"
+              elif level == "ERROR":
+                  color = RED
+                  prefix = f"{color}ERROR{RESET}"
+              else:
+                  color = WHITE
+                  prefix = f"{color}{level}{RESET}"
+              
+              if "<underline>" in msg and "</underline>" in msg:
+                  msg = msg.replace("<underline>", UNDERLINE).replace("</underline>", RESET)
+              
+              print(f"{prefix} - {msg}")
 
           reddit = praw.Reddit(
               client_id=client_id,
@@ -127,15 +149,15 @@ jobs:
               if total_memes >= MEME_LIMIT:
                   debug_log("📊 Meme limit reached. Stopping download.")
                   break
-              debug_log(f"🔍 Scraping r/{subreddit} for new posts...")
+              debug_log(f"🔍 Scraping r/{subreddit} for new posts...", level="DEBUG")
               for post in reddit.subreddit(subreddit).new(limit=post_limit):
                   if not disable_cache_check and post.id in cached_ids:
-                      debug_log(f"⏭️ Skipping cached post: {post.id}")
+                      debug_log(f"⏭️ Skipping cached post: {post.id}", level="INFO")
                       continue
                   try:
                       ext = os.path.splitext(post.url.lower())[1]
                       if ext in valid_image_exts:
-                          debug_log(f"📷 Found image post: {post.id}")
+                          debug_log(f"📷 Found image post: <underline>{post.id}</underline>", level="INFO")
                           r = requests.get(post.url, timeout=10)
                           r.raise_for_status()
                           out_fname = os.path.join("cache", f"{post.id}{ext}")
@@ -152,9 +174,9 @@ jobs:
                           })
                           new_ids.append(post.id)
                           total_memes += 1
-                          debug_log(f"✅ Downloaded image: {out_fname}")
+                          debug_log(f"✅ Downloaded image: {out_fname}", level="INFO")
                       else:
-                          debug_log(f"🎥 Found potential video post: {post.id}")
+                          debug_log(f"🎥 Found potential video post: {post.id}", level="INFO")
                           outtmpl = f"cache/{post.id}.%(ext)s"
                           ydl_opts = {
                             'outtmpl': outtmpl,
@@ -174,7 +196,7 @@ jobs:
                                   downloaded_file = os.path.join("cache", file)
                                   break
                           if downloaded_file:
-                              debug_log(f"📹 Downloaded video: {downloaded_file}")
+                              debug_log(f"📹 Downloaded video: {downloaded_file}", level="INFO")
                               memes_metadata.append({
                                   "id": post.id,
                                   "title": post.title,
@@ -186,22 +208,22 @@ jobs:
                               })
                               new_ids.append(post.id)
                               total_memes += 1
-                              debug_log(f"✅ Processed video post: {post.id}")
+                              debug_log(f"✅ Processed video post: {post.id}", level="INFO")
                           else:
-                              print(f"⚠️ Post {post.id}: Could not save as image or video - skipping.")
+                              debug_log(f"⚠️ Post {post.id}: Could not save as image or video - skipping.", level="WARNING")
                   except Exception as e:
-                      print(f"⚠️ Error processing post {post.id}: {e}")
+                      debug_log(f"⚠️ Error processing post {post.id}: {e}", level="ERROR")
 
           if new_ids:
               cached_ids.update(new_ids)
               with open(cache_file, "w") as f:
                   json.dump(sorted(cached_ids), f)
-              print(f"🎉 Downloaded {len(new_ids)} new items.")
+              debug_log(f"🎉 Downloaded {len(new_ids)} new items.", level="INFO")
           else:
-              print("✨ No New Items Found!")
+              debug_log("✨ No New Items Found!", level="INFO")
           with open("cache/memes_metadata.json", "w") as f:
               json.dump(memes_metadata, f, indent=2)
-          debug_log("📄 Memes metadata collected.")
+          debug_log("📄 Memes metadata collected.", level="INFO")
           EOF
 
       - name: 🗂️ Collect Metadata
