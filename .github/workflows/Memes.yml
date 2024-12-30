@@ -83,27 +83,32 @@ jobs:
           import requests
           import praw
           import yt_dlp
+
           client_id = os.getenv("CLIENT_ID")
           client_secret = os.getenv("CLIENT_SECRET")
           user_agent = os.getenv("USER_AGENT")
           disable_cache_check = os.getenv("DISABLE_CACHE_CHECK", "false").lower() == "true"
           show_debug = os.getenv("SHOW_DEBUG", "false").lower() == "true"
           post_limit = int(os.getenv("POST_LIMIT", "5"))
-          MEME_LIMIT = 250  # Maximum number of items to collect
+          MEME_LIMIT = 250
+
           def debug_log(msg):
               if show_debug:
                   print(f"🛠️ DEBUG: {msg}")
+
           reddit = praw.Reddit(
               client_id=client_id,
               client_secret=client_secret,
               user_agent=user_agent,
           )
+
           cache_file = "cache/meme_ids.json"
           try:
               with open(cache_file, "r") as f:
                   cached_ids = set(json.load(f))
           except:
               cached_ids = set()
+
           valid_image_exts = ['.png','.jpg','.jpeg','.webp','.gif']
           subreddits = [
               "memes", "ProgrammerHumor", "dankmemes", "DirtyMemes",
@@ -114,16 +119,18 @@ jobs:
           total_memes = 0
           new_ids = []
           memes_metadata = []
+
           for subreddit in subreddits:
               if total_memes >= MEME_LIMIT:
                   break
+              debug_log(f"Scraping r/{subreddit} for new posts...")
               for post in reddit.subreddit(subreddit).new(limit=post_limit):
                   if not disable_cache_check and post.id in cached_ids:
                       continue
                   try:
                       ext = os.path.splitext(post.url.lower())[1]
                       if ext in valid_image_exts:
-                          # Download image
+                          debug_log(f"Found image post: {post.id}")
                           r = requests.get(post.url, timeout=10)
                           r.raise_for_status()
                           out_fname = os.path.join("cache", f"{post.id}{ext}")
@@ -141,13 +148,15 @@ jobs:
                           new_ids.append(post.id)
                           total_memes += 1
                       else:
-                          # Assume video
+                          debug_log(f"Possible video post: {post.id}")
                           outtmpl = f"cache/{post.id}.%(ext)s"
                           ydl_opts = {
                               'outtmpl': outtmpl,
                               'quiet': not show_debug,
                               'no_warnings': True,
-                              'ignoreerrors': True
+                              'ignoreerrors': True,
+                              'format': 'bestvideo+bestaudio/best',
+                              'merge_output_format': 'mp4',
                           }
                           with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                               ydl.download([post.url])
@@ -157,6 +166,7 @@ jobs:
                                   downloaded_file = os.path.join("cache", file)
                                   break
                           if downloaded_file:
+                              debug_log(f"Found video file: {downloaded_file}")
                               memes_metadata.append({
                                   "id": post.id,
                                   "title": post.title,
@@ -172,6 +182,7 @@ jobs:
                               print(f"⚠️ Post {post.id}: Could not save as image or video - skipping.")
                   except Exception as e:
                       print(f"⚠️ Error processing post {post.id}: {e}")
+
           if new_ids:
               cached_ids.update(new_ids)
               with open(cache_file, "w") as f:
