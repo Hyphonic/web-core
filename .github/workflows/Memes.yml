@@ -235,7 +235,7 @@ jobs:
         id: compute-hash
         run: |
           echo "🔍 [DEBUG] Computing hash of meme_ids.json..."
-          if [ -f cache/meme_ids.json]; then
+          if [ -f cache/meme_ids.json ]; then
             FILE_HASH=$(sha256sum cache/meme_ids.json | awk '{print $1}')
             echo "🔑 [DEBUG] Computed hash: $FILE_HASH"
           else
