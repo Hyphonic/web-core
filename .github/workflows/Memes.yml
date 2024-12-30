@@ -119,14 +119,15 @@ jobs:
 
           valid_image_exts = ['.png','.jpg','.jpeg','.webp','.gif']
           subreddits = [
-              "memes", "ProgrammerHumor", "dankmemes", "DirtyMemes",
-              "rule34", "rareinsults", "futanari", "HardPornGifs",
-              "funny", "science", "todayilearned",
-              "porn_gifs", "MemeVideos", "hentai", "boobs", "pussy", "meirl",
-              "gifs", "aww", "videos", "AskReddit", "Holup", "wtf", "hmmm", "coolguides",
-              "Unexpected", "Hentai_GIF", "horsecockfuta", "FutanariGifs",
-              "Yiff", "trapHentai", "Fnafpornrp", "Futanari_Comics", "FutaCum",
-              "Overwatch_Porn", "3DHentai"
+              "Memes", "ProgrammerHumor", "DankMemes", "DirtyMemes",
+              "Rule34", "RareInsults", "Futanari", "HardPornGifs",
+              "Funny", "Science", "TodayILearned",
+              "Porn_Gifs", "MemeVideos", "Hentai", "Boobs", "Pussy", "MeIRL",
+              "Gifs", "Aww", "Videos", "AskReddit", "HolUp", "WTF", "Hmmm", "CoolGuides",
+              "Unexpected", "Hentai_GIF", "HorseCockFuta", "FutanariGifs",
+              "Yiff", "TrapHentai", "Fnafpornrp", "Futanari_Comics", "FutaCum",
+              "Overwatch_Porn", "3DHentai", "MyLittlePony", "FurryPornSubreddit",
+              "3DHentai", "SweatyPalms", "SpreadSmile", "Pranks"
           ]
           total_memes = 0
           new_ids = []
@@ -167,13 +168,13 @@ jobs:
                           outtmpl = f"cache/{post.id}.%(ext)s"
                           ydl_opts = {
                             'outtmpl': outtmpl,
-                            'quiet': not show_debug,            # Keeps quiet when not in debug mode
+                            'quiet': True,
                             'no_warnings': True,               # Suppresses warnings
                             'ignoreerrors': True,              # Continues on download errors
-                            'format': 'bestvideo+bestaudio/best',  # Selects the best video and audio
+                            'format': '[filesize<=20M]',
                             'merge_output_format': 'mp4',      # Merges into mp4 format
                             'no-progress': True,               # Disables the progress bar
-                            'loglevel': 'error',                # Sets log level to show only errors
+                            'loglevel': 'error'                # Sets log level to show only errors
                           }
                           with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                               ydl.download([post.url])
