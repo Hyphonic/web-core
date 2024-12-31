@@ -340,7 +340,7 @@ jobs:
                 download_url = "https://coomer.su" + p
                 debug_log(f"  🟡 Found new file: {file_id}, URL={download_url}")
                 try:
-                    r = requests.get(download_url, timeout=10)
+                    r = requests.get(download_url, timeout=300)
                     r.raise_for_status()
                     out_fname = os.path.join("cache", f"{file_id}-{os.path.basename(p)}")
                     with open(out_fname, "wb") as out:
