@@ -372,7 +372,10 @@ jobs:
 
                   for p in paths:
                       download_url = "https://coomer.su" + p
-                      out_fname = os.path.join("cache", f"{file_id}-{os.path.basename(p)}")
+                      # Create directories per creator
+                      creator_dir = os.path.join("cache", creator)
+                      os.makedirs(creator_dir, exist_ok=True)
+                      out_fname = os.path.join(creator_dir, f"{file_id}-{os.path.basename(p)}")
                       # Deduplicate by url/out_fname across all creators
                       unique_tasks[(download_url, out_fname)] = file_id
 
