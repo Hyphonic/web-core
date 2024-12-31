@@ -325,6 +325,7 @@ jobs:
                 continue
 
             path_part = item.get('path', '')
+            print(f"  🟡 Possible new file: {file_id}, URL=https://coomer.su{path_part}")
             if not path_part:
                 continue
             download_url = "https://coomer.su" + path_part
@@ -392,7 +393,7 @@ jobs:
       - name: 📤 Download Cache Artifact
         uses: actions/download-artifact@v4
         with:
-          name: cache
+          name: meme-cache
           path: cache/
 
       - name: 📦 Set Up Python
