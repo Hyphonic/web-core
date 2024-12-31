@@ -305,7 +305,7 @@ jobs:
           from requests.adapters import HTTPAdapter
           from requests.packages.urllib3.util.retry import Retry
 
-          disable_cache_check = False
+          disable_cache_check = True
           show_debug = True
           creators = ["darcyxnycole", "belledelphine", "sweetiefox_of"]  # Add more creators as needed
           o_limit = 50  # Number of posts to fetch per creator
