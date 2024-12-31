@@ -1,4 +1,4 @@
-name: 🟠 Download Reddit Memes
+name: 📙 Download Reddit Memes
 
 on:
   schedule:
@@ -54,19 +54,19 @@ jobs:
 
       - name: 🧰 Install Dependencies
         run: |
-          echo "🐍 Upgrading pip..."
+          echo "🟢 Upgrading pip..."
           python -m pip install --upgrade pip
-          echo "📦 Installing PRAW, Requests, and yt_dlp..."
+          echo "🟢 Installing PRAW, Requests, and yt_dlp..."
           pip install praw requests yt-dlp
 
       - name: 🔧 Install Rclone
         run: |
-          echo "🔄 Installing Rclone..."
+          echo "🟢 Installing Rclone..."
           curl https://rclone.org/install.sh | sudo bash
 
       - name: 📂 Set Up Rclone Config
         run: |
-          echo "📁 Setting up Rclone configuration..."
+          echo "🟢 Setting up Rclone configuration..."
           mkdir -p ~/.config/rclone
           echo "${{ secrets.PIXELDRAIN_CONF }}" > ~/.config/rclone/rclone.conf
 
@@ -80,15 +80,14 @@ jobs:
           SHOW_DEBUG: ${{ github.event.inputs.show_debug || true }}
           POST_LIMIT: ${{ github.event.inputs.post_limit || '5' }}
         run: |
-          echo "🚀 Starting meme download process..."
+          echo "🟢 Starting meme download process..."
           mkdir -p cache
           python - <<EOF
           import os
           import json
           import requests
           import praw
-          import yt_dlp
-
+          
           client_id = os.getenv("CLIENT_ID")
           client_secret = os.getenv("CLIENT_SECRET")
           user_agent = os.getenv("USER_AGENT")
@@ -96,162 +95,145 @@ jobs:
           show_debug = os.getenv("SHOW_DEBUG", "false").lower() == "true"
           post_limit = int(os.getenv("POST_LIMIT", "5"))
           MEME_LIMIT = 250
-
-          def debug_log(msg, level="INFO"):
-              RESET = "\033[0m"
-              GREEN = "\033[92m"
-              YELLOW = "\033[93m"
-              RED = "\033[91m"
-              UNDERLINE = "\033[4m"
-              WHITE = "\033[97m"
-              
-              if level == "INFO":
-                  color = GREEN
-                  prefix = f"{color}INFO{RESET}"
-              elif level == "WARNING":
-                  color = YELLOW
-                  prefix = f"{color}WARNING{RESET}"
-              elif level == "ERROR":
-                  color = RED
-                  prefix = f"{color}ERROR{RESET}"
-              else:
-                  color = WHITE
-                  prefix = f"{color}{level}{RESET}"
-              
-              if "<underline>" in msg and "</underline>" in msg:
-                  msg = msg.replace("<underline>", UNDERLINE).replace("</underline>", RESET)
-              
-              print(f"{prefix} - {msg}")
-
+          
+          def debug_log(msg):
+          	if show_debug:
+          		print(msg)
+          
           reddit = praw.Reddit(
-              client_id=client_id,
-              client_secret=client_secret,
-              user_agent=user_agent,
+          	client_id=client_id,
+          	client_secret=client_secret,
+          	user_agent=user_agent,
           )
-          debug_log("✅ Reddit instance created.")
-
+          debug_log("🟢 Reddit instance created.")
+          
           cache_file = "cache/meme_ids.json"
           try:
-              with open(cache_file, "r") as f:
-                  cached_ids = set(json.load(f))
-              debug_log("📂 Loaded cached meme IDs.")
+          	with open(cache_file, "r") as f:
+          		cached_ids = set(json.load(f))
+          	debug_log("🟢 Loaded cached meme IDs.")
           except:
-              cached_ids = set()
-              debug_log("⚠️ No cache found. Starting fresh.")
-
+          	cached_ids = set()
+          	debug_log("🔴 No cache found. Starting fresh.")
+          
           valid_image_exts = ['.png','.jpg','.jpeg','.webp','.gif']
           subreddits = ["Memes", "ProgrammerHumor", "DankMemes", "DirtyMemes", "RareInsults", "Funny", "Science", "TodayILearned", "MemeVideos", "MeIRL", "Gifs", "Aww", "Videos", "AskReddit", "HolUp", "WTF", "Hmmm", "CoolGuides", "Unexpected", "SweatyPalms", "SpreadSmile", "Pranks"]
           total_memes = 0
           new_ids = []
           memes_metadata = []
-
+          video_posts = []
+          
           for subreddit in subreddits:
-              if total_memes >= MEME_LIMIT:
-                  debug_log("📊 Meme limit reached. Stopping download.")
-                  break
-              debug_log(f"🔍 Scraping r/{subreddit} for new posts...", level="DEBUG")
-              for post in reddit.subreddit(subreddit).new(limit=post_limit):
-                  if not disable_cache_check and post.id in cached_ids:
-                      debug_log(f"⏭️ Skipping cached post: {post.id}", level="INFO")
-                      continue
-                  try:
-                      ext = os.path.splitext(post.url.lower())[1]
-                      if ext in valid_image_exts:
-                          debug_log(f"📷 Found image post: <underline>{post.id}</underline>", level="INFO")
-                          r = requests.get(post.url, timeout=10)
-                          r.raise_for_status()
-                          out_fname = os.path.join("cache", f"{post.id}{ext}")
-                          with open(out_fname, "wb") as f:
-                              f.write(r.content)
-                          memes_metadata.append({
-                              "id": post.id,
-                              "title": post.title,
-                              "author": str(post.author) if post.author else "Unknown",
-                              "subreddit": str(post.subreddit),
-                              "upvotes": post.ups,
-                              "filename": os.path.basename(out_fname),
-                              "type": "image"
-                          })
-                          new_ids.append(post.id)
-                          total_memes += 1
-                          debug_log(f"✅ Downloaded image: {out_fname}", level="INFO")
-                      else:
-                          debug_log(f"🎥 Found potential video post: {post.id}", level="INFO")
-                          outtmpl = f"cache/{post.id}.%(ext)s"
-                          ydl_opts = {
-                            'outtmpl': outtmpl,
-                            'quiet': True,
-                            'no_warnings': True,               # Suppresses warnings
-                            'ignoreerrors': True,              # Continues on download errors
-                            'format': 'best',
-                            'merge_output_format': 'mp4',      # Merges into mp4 format
-                            'no-progress': True,               # Disables the progress bar
-                            'loglevel': 'error'                # Sets log level to show only errors
-                          }
-                          with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                              ydl.download([post.url])
-                          downloaded_file = None
-                          for file in os.listdir("cache"):
-                              if file.startswith(post.id):
-                                  downloaded_file = os.path.join("cache", file)
-                                  break
-                          if downloaded_file:
-                              debug_log(f"📹 Downloaded video: {downloaded_file}", level="INFO")
-                              memes_metadata.append({
-                                  "id": post.id,
-                                  "title": post.title,
-                                  "author": str(post.author) if post.author else "Unknown",
-                                  "subreddit": str(post.subreddit),
-                                  "upvotes": post.ups,
-                                  "filename": os.path.basename(downloaded_file),
-                                  "type": "video"
-                              })
-                              new_ids.append(post.id)
-                              total_memes += 1
-                              debug_log(f"✅ Processed video post: {post.id}", level="INFO")
-                          else:
-                              debug_log(f"⚠️ Post {post.id}: Could not save as image or video - skipping.", level="WARNING")
-                  except Exception as e:
-                      debug_log(f"⚠️ Error processing post {post.id}: {e}", level="ERROR")
-
+          	if total_memes >= MEME_LIMIT:
+          		debug_log("🔴 Meme limit reached. Stopping download.")
+          		break
+          	debug_log(f"🟢 Scraping r/{subreddit} for new posts...")
+          	for post in reddit.subreddit(subreddit).new(limit=post_limit):
+          		if not disable_cache_check and post.id in cached_ids:
+          			debug_log(f"  🟠 Skipping cached post: {post.id}")
+          			continue
+          		try:
+          			ext = os.path.splitext(post.url.lower())[1]
+          			if ext in valid_image_exts:
+          				debug_log(f"  🟡 Found image post: <underline>{post.id}</underline>")
+          				r = requests.get(post.url, timeout=10)
+          				r.raise_for_status()
+          				out_fname = os.path.join("cache", f"{post.id}{ext}")
+          				with open(out_fname, "wb") as f:
+          					f.write(r.content)
+          				memes_metadata.append({
+          					"id": post.id,
+          					"title": post.title,
+          					"author": str(post.author) if post.author else "Unknown",
+          					"subreddit": str(post.subreddit),
+          					"upvotes": post.ups,
+          					"filename": os.path.basename(out_fname),
+          					"type": "image"
+          				})
+          				new_ids.append(post.id)
+          				total_memes += 1
+          				debug_log(f"  🟡 Downloaded image: {out_fname}")
+          			else:
+          				debug_log(f"  🟠 Found potential video post: {post.id}")
+          				video_posts.append(post)
+          		except Exception as e:
+          			debug_log(f"  🔴 Error processing post {post.id}: {e}")
+          
           if new_ids:
-              cached_ids.update(new_ids)
-              with open(cache_file, "w") as f:
-                  json.dump(sorted(cached_ids), f)
-              debug_log(f"🎉 Downloaded {len(new_ids)} new items.", level="INFO")
+          	cached_ids.update(new_ids)
+          	with open(cache_file, "w") as f:
+          		json.dump(sorted(cached_ids), f)
+          	debug_log(f"🟢 Downloaded {len(new_ids)} new items.")
           else:
-              debug_log("✨ No New Items Found!", level="INFO")
+          	debug_log("🟠 No New Items Found!")
+          
           with open("cache/memes_metadata.json", "w") as f:
-              json.dump(memes_metadata, f, indent=2)
-          debug_log("📄 Memes metadata collected.", level="INFO")
+          	json.dump(memes_metadata, f, indent=2)
+          debug_log("🟢 Memes metadata collected.")
+          
+          import yt_dlp
+          for post in video_posts:
+          	try:
+          		outtmpl = f"cache/{post.id}.%(ext)s"
+          		ydl_opts = {
+          			'outtmpl': outtmpl,
+          			'quiet': True,
+          			'no_warnings': True,
+          			'ignoreerrors': True,
+          			'format': 'best',
+          			'merge_output_format': 'mp4',
+          			'no-progress': True,
+          			'loglevel': 'error'
+          		}
+          		with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+          			ydl.download([post.url])
+          		downloaded_file = None
+          		for file in os.listdir("cache"):
+          			if file.startswith(post.id):
+          				downloaded_file = os.path.join("cache", file)
+          				break
+          		if downloaded_file:
+          			debug_log(f"  🟡 Downloaded video: {downloaded_file}")
+          			memes_metadata.append({
+          				"id": post.id,
+          				"title": post.title,
+          				"author": str(post.author) if post.author else "Unknown",
+          				"subreddit": str(post.subreddit),
+          				"upvotes": post.ups,
+          				"filename": os.path.basename(downloaded_file),
+          				"type": "video"
+          			})
+          			total_memes += 1
+          	except Exception as e:
+          		debug_log(f"  🔴 Error processing video post {post.id}: {e}")
           EOF
 
       - name: 🗂️ Collect Metadata
         id: collect-metadata
         run: |
-          echo "📊 Collecting metadata..."
+          echo "🟢 Collecting metadata..."
           # Limit to first 250 memes to prevent matrix overflow
           limited_metadata=$(jq '.[:250]' cache/memes_metadata.json)
           metadata=$(echo "$limited_metadata" | jq -c .)
           echo "metadata=$metadata" >> $GITHUB_OUTPUT
-          echo "✅ Metadata collection complete."
+          echo "🟢 Metadata collection complete."
 
       - name: 🌐 Upload Memes with Rclone
         run: |
-          echo "🔄 Uploading memes to Pixeldrain with Rclone..."
+          echo "🟢 Uploading memes to Pixeldrain with Rclone..."
           rclone copy cache Pixeldrain:"💯 Memes"
-          echo "✅ Upload complete."
+          echo "🟢 Upload complete."
 
       - name: 🔧 Compute Hash of Updated meme_ids.json
         id: compute-hash
         run: |
-          echo "🔍 Computing hash of meme_ids.json..."
+          echo "🟢 Computing hash of meme_ids.json..."
           if [ -f cache/meme_ids.json ]; then
             FILE_HASH=$(sha256sum cache/meme_ids.json | awk '{print $1}')
-            echo "🔑 Computed hash: $FILE_HASH"
+            echo "🟢 Computed hash: $FILE_HASH"
           else
             FILE_HASH="empty-cache"
-            echo "⚠️ meme_ids.json not found. Using default hash."
+            echo "🔴 meme_ids.json not found. Using default hash."
           fi
           echo "hash=$FILE_HASH" >> $GITHUB_ENV
 
@@ -263,9 +245,9 @@ jobs:
 
       - name: 📜 List All Files
         run: |
-          echo "📂 Listing all files in cache..."
+          echo "🟢 Listing all files in cache..."
           tree
-          echo "✅ File listing complete."
+          echo "🟢 File listing complete."
 
       - name: 📤 Upload Cache as Artifact
         uses: actions/upload-artifact@v4
@@ -294,9 +276,9 @@ jobs:
 
       - name: 🧰 Install Python Dependencies
         run: |
-          echo "📦 Installing python-telegram-bot..."
+          echo "🟢 Installing python-telegram-bot..."
           pip install python-telegram-bot
-          echo "✅ Python dependencies installed."
+          echo "🟢 Python dependencies installed."
 
       - name: 📤 Send Memes in One Script
         run: |
@@ -307,76 +289,76 @@ jobs:
           import json
           import asyncio
           from telegram import Bot
-
+          
           BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
           CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
           METADATA_FILE = 'cache/memes_metadata.json'
-
+          
           def escape_markdown(text):
-              """Escapes Markdown-sensitive characters."""
-              escape_chars = r"_*[]()~`>#+-=|{}.!"
-              return re.sub(f'([{"".join(re.escape(c) for c in escape_chars)}])', r'\\\1', text)
-
+          	"""Escapes Markdown-sensitive characters."""
+          	escape_chars = r"_*[]()~`>#+-=|{}.!"
+          	return re.sub(f'([{"".join(re.escape(c) for c in escape_chars)}])', r'\\\1', text)
+          
           def build_caption(meme):
-              if meme['type'] == 'image':
-                  return f"""🎉 **New Meme Alert!**
+          	if meme['type'] == 'image':
+          		return f"""🎉 **New Meme Alert!**
           📜 *Title:* {escape_markdown(meme.get('title', 'No Title'))}
           🖋️ *Author:* {escape_markdown(meme.get('author', 'Unknown'))}
           👍 *Upvotes:* {meme.get('upvotes', '0')}
           🏷️ *Subreddit:* r/{escape_markdown(meme.get('subreddit', '?'))}"""
-              else:
-                  return f"""🎉 **New Video Meme Alert!**
+          	else:
+          		return f"""🎉 **New Video Meme Alert!**
           📜 *Title:* {escape_markdown(meme.get('title', 'No Title'))}
           🖋️ *Author:* {escape_markdown(meme.get('author', 'Unknown'))}
           👍 *Upvotes:* {meme.get('upvotes', '0')}
           🏷️ *Subreddit:* r/{escape_markdown(meme.get('subreddit', '?'))}"""
-
+          
           async def send_meme_async(bot, meme):
-              file_path = os.path.join('cache', meme['filename'])
-              caption = build_caption(meme)
-              if meme['type'] == 'image':
-                  with open(file_path, 'rb') as img:
-                      await bot.send_photo(
-                          chat_id=CHAT_ID,
-                          photo=img,
-                          caption=caption,
-                          parse_mode='Markdown'
-                      )
-                      print(f"📷 Sent image meme ID: {meme['id']}")
-              elif meme['type'] == 'video':
-                  with open(file_path, 'rb') as vid:
-                      await bot.send_video(
-                          chat_id=CHAT_ID,
-                          video=vid,
-                          caption=caption,
-                          parse_mode='Markdown',
-                          supports_streaming=True
-                      )
-                      print(f"🎥 Sent video meme ID: {meme['id']}")
-
+          	file_path = os.path.join('cache', meme['filename'])
+          	caption = build_caption(meme)
+          	if meme['type'] == 'image':
+          		with open(file_path, 'rb') as img:
+          			await bot.send_photo(
+          				chat_id=CHAT_ID,
+          				photo=img,
+          				caption=caption,
+          				parse_mode='Markdown'
+          			)
+          			print(f"🟢 Sent image meme ID: {meme['id']}")
+          	elif meme['type'] == 'video':
+          		with open(file_path, 'rb') as vid:
+          			await bot.send_video(
+          				chat_id=CHAT_ID,
+          				video=vid,
+          				caption=caption,
+          				parse_mode='Markdown',
+          				supports_streaming=True
+          			)
+          			print(f"🟢 Sent video meme ID: {meme['id']}")
+          
           async def main():
-              bot = Bot(token=BOT_TOKEN)
-              if not os.path.exists(METADATA_FILE):
-                  print("⚠️ No metadata file found. Nothing to send.")
-                  return
-
-              with open(METADATA_FILE, 'r') as f:
-                  memes = json.load(f)
-              print(f"📚 Loaded {len(memes)} memes from metadata.")
-
-              for meme in memes:
-                  try:
-                      await send_meme_async(bot, meme)
-                  except Exception as e:
-                      print(f"❌ Failed to send meme ID {meme['id']}: {e}")
-
-              print("✅ All memes have been processed.")
-
+          	bot = Bot(token=BOT_TOKEN)
+          	if not os.path.exists(METADATA_FILE):
+          		print("🟠 No metadata file found. Nothing to send.")
+          		return
+          
+          	with open(METADATA_FILE, 'r') as f:
+          		memes = json.load(f)
+          	print(f"🟢 Loaded {len(memes)} memes from metadata.")
+          
+          	for meme in memes:
+          		try:
+          			await send_meme_async(bot, meme)
+          		except Exception as e:
+          			print(f"🔴 Failed to send meme ID {meme['id']}: {e}")
+          
+          	print("🟢 All memes have been processed.")
+          
           if __name__ == '__main__':
-              try:
-                  asyncio.run(main())
-              except Exception as e:
-                  print(f"❌ Error sending memes in batch: {e}")
+          	try:
+          		asyncio.run(main())
+          	except Exception as e:
+          		print(f"🔴 Error sending memes in batch: {e}")
           EOF
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
