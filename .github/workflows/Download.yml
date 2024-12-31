@@ -420,10 +420,10 @@ jobs:
               debug_log("🟠 No New Items Found!")
           EOF
 
-      - name: 🌐 Upload Memes with Rclone
+      - name: 🌐 Upload Coomer Posts with Rclone
         run: |
-          echo "🟢 Uploading memes to Pixeldrain with Rclone..."
-          rclone copy cache Pixeldrain:"💯 Memes"
+          echo "🟢 Uploading coomer posts to Pixeldrain with Rclone..."
+          rclone copy cache Pixeldrain:"🌀 Onlyfans"
           echo "🟢 Upload complete."
 
       - name: 🔧 Compute Hash of Updated coomer_ids.json
