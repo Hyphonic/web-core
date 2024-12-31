@@ -279,7 +279,6 @@ jobs:
           pip install requests
 
       - name: ⏬ Download Coomer Posts (Parallel)
-        id: download-coomer
         run: |
           echo "🟢 Starting Coomer download process with parallel requests..."
           mkdir -p cache
@@ -293,121 +292,8 @@ jobs:
           show_debug = True
           coomer_url = "https://coomer.su/api/v1/onlyfans/user/darcyxnycole?o=50"
           cache_file = "cache/coomer_ids.json"
-          TIMEOUT_SECONDS = 300  # e.g. 5 min
-          MAX_WORKERS = 8        # Adjust for more/less concurrency
-
-          def debug_log(msg):
-              if show_debug:
-                  print(msg)
-
-          # Single-file download function
-          def download_file(download_url, out_fname, file_id):
-              try:
-                  r = requests.get(download_url, timeout=TIMEOUT_SECONDS)
-                  r.raise_for_status()
-                  with open(out_fname, "wb") as out:
-                      out.write(r.content)
-                  debug_log(f"    🟡 Downloaded {file_id} -> {out_fname}")
-                  return True
-              except Exception as e:
-                  debug_log(f"  🔴 Error downloading file {file_id}: {e}")
-                  return False
-
-          try:
-              with open(cache_file, "r") as f:
-                  cached_ids = set(json.load(f))
-              debug_log("🟢 Loaded cached Coomer IDs.")
-          except:
-              cached_ids = set()
-              debug_log("🔴 No cache found. Starting fresh.")
-
-          debug_log(f"🟢 Fetching data from {coomer_url}")
-          resp = requests.get(coomer_url, timeout=TIMEOUT_SECONDS)
-          resp.raise_for_status()
-          items = resp.json()
-
-          new_ids = []
-          tasks = []
-
-          # Collect download tasks
-          for item in items:
-              file_id = str(item.get('id', ''))
-              if file_id in cached_ids and not disable_cache_check:
-                  debug_log(f"  🔵 Skipping cached file: {file_id}")
-                  continue
-
-              # Gather all possible path fields
-              paths = []
-              if 'file' in item and 'path' in item['file']:
-                  paths.append(item['file']['path'])
-              for att in item.get('attachments', []):
-                  p = att.get('path')
-                  if p:
-                      paths.append(p)
-
-              # Queue downloads
-              for p in paths:
-                  download_url = "https://coomer.su" + p
-                  out_fname = os.path.join("cache", f"{file_id}-{os.path.basename(p)}")
-                  tasks.append((download_url, out_fname, file_id))
-
-          # Perform parallel downloads
-          debug_log(f"🟢 Starting parallel downloads for {len(tasks)} files.")
-          with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-              future_to_file = {executor.submit(download_file, url, fname, fid): fid for (url, fname, fid) in tasks}
-              for future in concurrent.futures.as_completed(future_to_file):
-                  fid = future_to_file[future]
-                  success = future.result()
-                  if success:
-                      new_ids.append(fid)
-
-          # Convert tasks dict back to a list of (url, out_fname, file_id) for concurrency
-          tasks = [(k[0], k[1], v) for k, v in unique_tasks.items()]
-          total_tasks = len(tasks)
-
-          debug_log(f"🟢 Starting parallel downloads for {total_tasks} unique files.")
-          completed = 0
-          with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-              future_map = {
-                  executor.submit(download_file, url, fname, fid): (url, fname, fid)
-              for (url, fname, fid) in tasks
-              }
-              for future in concurrent.futures.as_completed(future_map):
-                  url, fname, fid = future_map[future]
-                  success = future.result()
-                  completed += 1
-                  percent = int((completed / total_tasks) * 100)
-                  if success:
-                      debug_log(f"  🟡 ({percent}%) Downloaded {fid} -> {fname}")
-                      new_ids.append(fid)
-                  else:
-                      debug_log(f"  🔴 ({percent}%) Failed {fid}")
-
-          if new_ids:
-              cached_ids.update(new_ids)
-              with open(cache_file, "w") as f:
-                  json.dump(sorted(cached_ids), f)
-              debug_log(f"🟢 Downloaded {len(new_ids)} new Coomer files.")
-          else:
-              debug_log("🟠 No New Items Found!")
-          EOF
-
-      - name: ⏬ Download Coomer Posts (Parallel)
-        run: |
-          echo "🟢 Starting Coomer download process..."
-          mkdir -p cache
-          python - <<EOF
-          import os
-          import json
-          import requests
-          import concurrent.futures
-
-          disable_cache_check = False
-          show_debug = True
-          coomer_url = "https://coomer.su/api/v1/onlyfans/user/darcyxnycole?o=50"
-          cache_file = "cache/coomer_ids.json"
-          TIMEOUT_SECONDS = 300
-          MAX_WORKERS = 8
+          TIMEOUT_SECONDS = 300  # 5 minutes
+          MAX_WORKERS = 8        # Adjust as needed
 
           def debug_log(msg):
               if show_debug:
@@ -419,7 +305,6 @@ jobs:
                   r.raise_for_status()
                   with open(out_fname, "wb") as out:
                       out.write(r.content)
-                  debug_log(f"  🟡 Downloaded {file_id} -> {out_fname}")
                   return True
               except Exception as e:
                   debug_log(f"  🔴 Error downloading file {file_id}: {e}")
