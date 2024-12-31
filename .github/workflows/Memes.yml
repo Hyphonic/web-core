@@ -132,7 +132,7 @@ jobs:
               debug_log(f"🟢 Scraping r/{subreddit} for new posts...")
               for post in reddit.subreddit(subreddit).new(limit=post_limit):
                   if not disable_cache_check and post.id in cached_ids:
-                      debug_log(f"  🟠 Skipping cached post: {post.id}")
+                      debug_log(f"  🔵 Skipping cached post: {post.id}")
                       continue
                   try:
                       ext = os.path.splitext(post.url.lower())[1]
@@ -154,24 +154,12 @@ jobs:
                           })
                           new_ids.append(post.id)
                           total_memes += 1
-                          debug_log(f"  🟡 Downloaded image: {out_fname}")
+                          debug_log(f"    🟡 Downloaded image: {out_fname}")
                       else:
                           debug_log(f"  🟠 Found potential video post: {post.id}")
                           video_posts.append(post)
                   except Exception as e:
                       debug_log(f"  🔴 Error processing post {post.id}: {e}")
-          
-          if new_ids:
-              cached_ids.update(new_ids)
-              with open(cache_file, "w") as f:
-                  json.dump(sorted(cached_ids), f)
-              debug_log(f"🟢 Downloaded {len(new_ids)} new items.")
-          else:
-              debug_log("🟠 No New Items Found!")
-          
-          with open("cache/memes_metadata.json", "w") as f:
-              json.dump(memes_metadata, f, indent=2)
-          debug_log("🟢 Memes metadata collected.")
           
           for post in video_posts:
               try:
@@ -198,9 +186,22 @@ jobs:
                           "filename": os.path.basename(downloaded_file),
                           "type": "video"
                       })
+                      new_ids.append(post.id)
                       total_memes += 1
               except Exception as e:
                   debug_log(f"  🔴 Error processing video post {post.id}: {e}")
+
+          if new_ids:
+              cached_ids.update(new_ids)
+              with open(cache_file, "w") as f:
+                  json.dump(sorted(cached_ids), f)
+              debug_log(f"🟢 Downloaded {len(new_ids)} new items.")
+          else:
+              debug_log("🟠 No New Items Found!")
+          
+          with open("cache/memes_metadata.json", "w") as f:
+              json.dump(memes_metadata, f, indent=2)
+          debug_log("🟢 Memes metadata collected.")
           EOF
 
       - name: 🗂️ Collect Metadata
