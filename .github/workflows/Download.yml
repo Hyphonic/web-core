@@ -255,140 +255,152 @@ jobs:
     name: 🌐 Download Coomer
     runs-on: ubuntu-latest
     steps:
-    - name: 📥 Checkout Code
-      uses: actions/checkout@v4
-        
-    - name: 📦 Set Up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.x'
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
 
-    - name: 🧹 Remove Cache
-      uses: DareFox/delete-cache-by-key@v1
-      with:
-        key: coomer-ids-cache-
-        mode: exact
-      continue-on-error: true
+      - name: 📦 Set Up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
 
-    - name: 🚀 Restore Coomer IDs Cache
-      id: restore-coomer-cache
-      uses: actions/cache@v4
-      with:
-        path: cache/coomer_ids.json
-        key: coomer-ids-cache-
-        restore-keys: |
-          coomer-ids-cache-
+      - name: 🚀 Restore Coomer IDs Cache
+        id: restore-coomer-cache
+        uses: actions/cache@v4
+        with:
+          path: cache/coomer_ids.json
+          key: coomer-ids-cache-
+          restore-keys: |
+            coomer-ids-cache-
 
-    - name: 🧰 Install Dependencies
-      run: |
-        echo "🟢 Installing requests..."
-        python -m pip install --upgrade pip
-        pip install requests
+      - name: 🧰 Install Dependencies
+        run: |
+          echo "🟢 Installing dependencies..."
+          python -m pip install --upgrade pip
+          pip install requests
 
-    - name: ⏬ Download Coomer Posts
-      id: download-coomer
-      run: |
-        echo "🟢 Starting Coomer download process..."
-        mkdir -p cache
-        python - <<EOF
-        import os
-        import json
-        import requests
+      - name: ⏬ Download Coomer Posts (Parallel)
+        id: download-coomer
+        run: |
+          echo "🟢 Starting Coomer download process with parallel requests..."
+          mkdir -p cache
+          python - <<EOF
+          import os
+          import json
+          import requests
+          import concurrent.futures
 
-        disable_cache_check = False
-        show_debug = True
-        coomer_url = "https://coomer.su/api/v1/onlyfans/user/darcyxnycole?o=50"
-        cache_file = "cache/coomer_ids.json"
+          disable_cache_check = False
+          show_debug = True
+          coomer_url = "https://coomer.su/api/v1/onlyfans/user/darcyxnycole?o=50"
+          cache_file = "cache/coomer_ids.json"
+          TIMEOUT_SECONDS = 300  # e.g. 5 min
+          MAX_WORKERS = 8        # Adjust for more/less concurrency
 
-        def debug_log(msg):
-            if show_debug:
-                print(msg)
+          def debug_log(msg):
+              if show_debug:
+                  print(msg)
 
-        try:
-            with open(cache_file, "r") as f:
-                cached_ids = set(json.load(f))
-            debug_log("🟢 Loaded cached Coomer IDs.")
-        except:
-            cached_ids = set()
-            debug_log("🔴 No cache found. Starting fresh.")
+          # Single-file download function
+          def download_file(download_url, out_fname, file_id):
+              try:
+                  r = requests.get(download_url, timeout=TIMEOUT_SECONDS)
+                  r.raise_for_status()
+                  with open(out_fname, "wb") as out:
+                      out.write(r.content)
+                  debug_log(f"    🟡 Downloaded {file_id} -> {out_fname}")
+                  return True
+              except Exception as e:
+                  debug_log(f"  🔴 Error downloading file {file_id}: {e}")
+                  return False
 
-        debug_log(f"🟢 Fetching data from {coomer_url}")
-        resp = requests.get(coomer_url, timeout=10)
-        resp.raise_for_status()
-        items = resp.json()
+          try:
+              with open(cache_file, "r") as f:
+                  cached_ids = set(json.load(f))
+              debug_log("🟢 Loaded cached Coomer IDs.")
+          except:
+              cached_ids = set()
+              debug_log("🔴 No cache found. Starting fresh.")
 
-        new_ids = []
-        for item in items:
-            file_id = str(item.get('id', ''))
-            if file_id in cached_ids and not disable_cache_check:
-                debug_log(f"  🔵 Skipping cached file: {file_id}")
-                continue
+          debug_log(f"🟢 Fetching data from {coomer_url}")
+          resp = requests.get(coomer_url, timeout=TIMEOUT_SECONDS)
+          resp.raise_for_status()
+          items = resp.json()
 
-            # Gather all possible path fields
-            paths = []
-            # Check "file" block
-            if 'file' in item and 'path' in item['file']:
-                paths.append(item['file']['path'])
-            # Check "attachments"
-            for att in item.get('attachments', []):
-                p = att.get('path')
-                if p:
-                    paths.append(p)
+          new_ids = []
+          tasks = []
 
-            # Download paths
-            for p in paths:
-                download_url = "https://coomer.su" + p
-                debug_log(f"  🟡 Found new file: {file_id}, URL={download_url}")
-                try:
-                    r = requests.get(download_url, timeout=300)
-                    r.raise_for_status()
-                    out_fname = os.path.join("cache", f"{file_id}-{os.path.basename(p)}")
-                    with open(out_fname, "wb") as out:
-                        out.write(r.content)
-                    new_ids.append(file_id)
-                    debug_log(f"    🟡 Downloaded file: {out_fname}")
-                except Exception as e:
-                    debug_log(f"  🔴 Error downloading file {file_id}: {e}")
+          # Collect download tasks
+          for item in items:
+              file_id = str(item.get('id', ''))
+              if file_id in cached_ids and not disable_cache_check:
+                  debug_log(f"  🔵 Skipping cached file: {file_id}")
+                  continue
 
-        if new_ids:
-            cached_ids.update(new_ids)
-            with open(cache_file, "w") as f:
-                json.dump(sorted(cached_ids), f)
-            debug_log(f"🟢 Downloaded {len(new_ids)} new Coomer files.")
-        else:
-            debug_log("🟠 No New Items Found!")
-        EOF
+              # Gather all possible path fields
+              paths = []
+              if 'file' in item and 'path' in item['file']:
+                  paths.append(item['file']['path'])
+              for att in item.get('attachments', []):
+                  p = att.get('path')
+                  if p:
+                      paths.append(p)
 
-    - name: 🔧 Compute Hash of Updated coomer_ids.json
-      id: compute-hash-coomer
-      run: |
-        echo "🟢 Computing hash of coomer_ids.json..."
-        if [ -f cache/coomer_ids.json ]; then
-          COOMER_HASH=$(sha256sum cache/coomer_ids.json | awk '{print $1}')
-          echo "🟢 Computed hash: $COOMER_HASH"
-        else
-          COOMER_HASH="empty-cache"
-          echo "🔴 coomer_ids.json not found. Using default hash."
-        fi
-        echo "coomer_hash=$COOMER_HASH" >> $GITHUB_ENV
+              # Queue downloads
+              for p in paths:
+                  download_url = "https://coomer.su" + p
+                  out_fname = os.path.join("cache", f"{file_id}-{os.path.basename(p)}")
+                  tasks.append((download_url, out_fname, file_id))
 
-    - name: 💾 Update Coomer IDs Cache
-      uses: actions/cache@v4
-      with:
-        path: cache/coomer_ids.json
-        key: coomer-ids-cache-${{ env.coomer_hash }}
+          # Perform parallel downloads
+          debug_log(f"🟢 Starting parallel downloads for {len(tasks)} files.")
+          with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+              future_to_file = {executor.submit(download_file, url, fname, fid): fid for (url, fname, fid) in tasks}
+              for future in concurrent.futures.as_completed(future_to_file):
+                  fid = future_to_file[future]
+                  success = future.result()
+                  if success:
+                      new_ids.append(fid)
 
-    - name: 📜 List All Coomer Files
-      run: |
-        echo "🟢 Listing Coomer files in cache..."
-        tree cache
-        echo "🟢 File listing complete."
+          # Update cache
+          if new_ids:
+              cached_ids.update(new_ids)
+              with open(cache_file, "w") as f:
+                  json.dump(sorted(cached_ids), f)
+              debug_log(f"🟢 Downloaded {len(new_ids)} new Coomer files.")
+          else:
+              debug_log("🟠 No New Items Found!")
+          EOF
 
-    - name: 📤 Upload Cache as Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: coomer-cache
-        path: cache/
+      - name: 🔧 Compute Hash of Updated coomer_ids.json
+        id: compute-hash-coomer
+        run: |
+          echo "🟢 Computing hash of coomer_ids.json..."
+          if [ -f cache/coomer_ids.json ]; then
+            COOMER_HASH=$(sha256sum cache/coomer_ids.json | awk '{print $1}')
+            echo "🟢 Computed hash: $COOMER_HASH"
+          else
+            COOMER_HASH="empty-cache"
+            echo "🔴 coomer_ids.json not found. Using default hash."
+          fi
+          echo "coomer_hash=$COOMER_HASH" >> $GITHUB_ENV
+
+      - name: 💾 Update Coomer IDs Cache
+        uses: actions/cache@v4
+        with:
+          path: cache/coomer_ids.json
+          key: coomer-ids-cache-${{ env.coomer_hash }}
+
+      - name: 📜 List All Coomer Files
+        run: |
+          echo "🟢 Listing Coomer files in cache..."
+          tree cache
+          echo "🟢 File listing complete."
+
+      - name: 📤 Upload Cache as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coomer-cache
+          path: cache/
 
   send-to-telegram:
     needs: download-memes
