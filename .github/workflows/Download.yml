@@ -89,6 +89,8 @@ jobs:
           import praw
           import subprocess
           import sys
+          from requests.adapters import HTTPAdapter
+          from requests.packages.urllib3.util.retry import Retry
           
           client_id = os.getenv("CLIENT_ID")
           client_secret = os.getenv("CLIENT_SECRET")
@@ -125,6 +127,12 @@ jobs:
           memes_metadata = []
           video_posts = []
           
+          session = requests.Session()
+          retry = Retry(total=3, backoff_factor=1, status_forcelist=[502, 503, 504])
+          adapter = HTTPAdapter(max_retries=retry)
+          session.mount('http://', adapter)
+          session.mount('https://', adapter)
+          
           for subreddit in subreddits:
               if total_memes >= MEME_LIMIT:
                   debug_log("🔴 Meme limit reached. Stopping download.")
@@ -138,7 +146,7 @@ jobs:
                       ext = os.path.splitext(post.url.lower())[1]
                       if ext in valid_image_exts:
                           debug_log(f"  🟡 Found image post: {post.id}")
-                          r = requests.get(post.url, timeout=10)
+                          r = session.get(post.url, timeout=10)
                           r.raise_for_status()
                           out_fname = os.path.join("cache", f"{post.id}{ext}")
                           with open(out_fname, "wb") as f:
@@ -294,10 +302,13 @@ jobs:
           import json
           import requests
           import concurrent.futures
+          from requests.adapters import HTTPAdapter
+          from requests.packages.urllib3.util.retry import Retry
 
           disable_cache_check = False
           show_debug = True
-          coomer_url = "https://coomer.su/api/v1/onlyfans/user/darcyxnycole?o=50"
+          creators = ["darcyxnycole", "belledelphine", "sweetiefox_of"]  # Add more creators as needed
+          o_limit = 50  # Number of posts to fetch per creator
           cache_file = "cache/coomer_ids.json"
           TIMEOUT_SECONDS = 300  # 5 minutes
           MAX_WORKERS = 8        # Adjust as needed
@@ -308,7 +319,7 @@ jobs:
 
           def download_file(download_url, out_fname, file_id):
               try:
-                  r = requests.get(download_url, timeout=TIMEOUT_SECONDS)
+                  r = session.get(download_url, timeout=TIMEOUT_SECONDS)
                   r.raise_for_status()
                   with open(out_fname, "wb") as out:
                       out.write(r.content)
@@ -325,36 +336,46 @@ jobs:
               cached_ids = set()
               debug_log("🔴 No cache found. Starting fresh.")
 
-          debug_log(f"🟢 Fetching data from {coomer_url}")
-          resp = requests.get(coomer_url, timeout=TIMEOUT_SECONDS)
-          resp.raise_for_status()
-          items = resp.json()
-
           unique_tasks = {}
           new_ids = []
 
-          # Gather all download tasks
-          for item in items:
-              file_id = str(item.get('id', ''))
-              if file_id in cached_ids and not disable_cache_check:
-                  debug_log(f"  🔵 Skipping cached file: {file_id}")
+          session = requests.Session()
+          retry = Retry(total=3, backoff_factor=1, status_forcelist=[502, 503, 504])
+          adapter = HTTPAdapter(max_retries=retry)
+          session.mount('http://', adapter)
+          session.mount('https://', adapter)
+
+          for creator in creators:
+              coomer_url = f"https://coomer.su/api/v1/onlyfans/user/{creator}?o={o_limit}"
+              debug_log(f"🟢 Fetching data from {coomer_url}")
+              try:
+                  resp = session.get(coomer_url, timeout=TIMEOUT_SECONDS)
+                  resp.raise_for_status()
+                  items = resp.json()
+              except Exception as e:
+                  debug_log(f"🔴 Failed to fetch data for {creator}: {e}")
                   continue
 
-              paths = set()
-              if 'file' in item and 'path' in item['file']:
-                  paths.add(item['file']['path'])
-              for att in item.get('attachments', []):
-                  p = att.get('path')
-                  if p:
-                      paths.add(p)
+              for item in items:
+                  file_id = str(item.get('id', ''))
+                  if file_id in cached_ids and not disable_cache_check:
+                      debug_log(f"  🔵 Skipping cached file: {file_id}")
+                      continue
 
-              for p in paths:
-                  download_url = "https://coomer.su" + p
-                  out_fname = os.path.join("cache", f"{file_id}-{os.path.basename(p)}")
-                  # Deduplicate by url/out_fname
-                  unique_tasks[(download_url, out_fname)] = file_id
+                  paths = set()
+                  if 'file' in item and 'path' in item['file']:
+                      paths.add(item['file']['path'])
+                  for att in item.get('attachments', []):
+                      p = att.get('path')
+                      if p:
+                          paths.add(p)
 
-          # Convert tasks dict back to a list of (url, out_fname, file_id) for concurrency
+                  for p in paths:
+                      download_url = "https://coomer.su" + p
+                      out_fname = os.path.join("cache", f"{file_id}-{os.path.basename(p)}")
+                      # Deduplicate by url/out_fname across all creators
+                      unique_tasks[(download_url, out_fname)] = file_id
+
           tasks = [(k[0], k[1], v) for k, v in unique_tasks.items()]
           total_tasks = len(tasks)
 
