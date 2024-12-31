@@ -293,6 +293,17 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests
 
+      - name: 🔧 Install Rclone
+        run: |
+          echo "🟢 Installing Rclone..."
+          curl https://rclone.org/install.sh | sudo bash
+
+      - name: 📂 Set Up Rclone Config
+        run: |
+          echo "🟢 Setting up Rclone configuration..."
+          mkdir -p ~/.config/rclone
+          echo "${{ secrets.PIXELDRAIN_CONF }}" > ~/.config/rclone/rclone.conf
+
       - name: ⏬ Download Coomer Posts (Parallel)
         run: |
           echo "🟢 Starting Coomer download process with parallel requests..."
@@ -408,6 +419,12 @@ jobs:
           else:
               debug_log("🟠 No New Items Found!")
           EOF
+
+      - name: 🌐 Upload Memes with Rclone
+        run: |
+          echo "🟢 Uploading memes to Pixeldrain with Rclone..."
+          rclone copy cache Pixeldrain:"💯 Memes"
+          echo "🟢 Upload complete."
 
       - name: 🔧 Compute Hash of Updated coomer_ids.json
         id: compute-hash-coomer
