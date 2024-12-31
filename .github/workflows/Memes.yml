@@ -1,4 +1,4 @@
-name: 📙 Download Reddit Memes
+name: Download Posts
 
 on:
   schedule:
@@ -250,7 +250,7 @@ jobs:
         with:
           name: meme-cache
           path: cache/
-  
+
   download-coomer:
     name: 🌐 Download Coomer
     runs-on: ubuntu-latest
@@ -324,23 +324,31 @@ jobs:
                 debug_log(f"  🔵 Skipping cached file: {file_id}")
                 continue
 
-            path_part = item.get('path', '')
-            print(f"  🟡 Possible new file: {file_id}, URL=https://coomer.su{path_part}")
-            if not path_part:
-                continue
-            download_url = "https://coomer.su" + path_part
-            debug_log(f"  🟡 Found new file: {file_id}, URL={download_url}")
+            # Gather all possible path fields
+            paths = []
+            # Check "file" block
+            if 'file' in item and 'path' in item['file']:
+                paths.append(item['file']['path'])
+            # Check "attachments"
+            for att in item.get('attachments', []):
+                p = att.get('path')
+                if p:
+                    paths.append(p)
 
-            try:
-                r = requests.get(download_url, timeout=10)
-                r.raise_for_status()
-                out_fname = os.path.join("cache", f"{file_id}.dat")
-                with open(out_fname, "wb") as out:
-                    out.write(r.content)
-                new_ids.append(file_id)
-                debug_log(f"    🟡 Downloaded file: {out_fname}")
-            except Exception as e:
-                debug_log(f"  🔴 Error downloading file {file_id}: {e}")
+            # Download paths
+            for p in paths:
+                download_url = "https://coomer.su" + p
+                debug_log(f"  🟡 Found new file: {file_id}, URL={download_url}")
+                try:
+                    r = requests.get(download_url, timeout=10)
+                    r.raise_for_status()
+                    out_fname = os.path.join("cache", f"{file_id}-{os.path.basename(p)}")
+                    with open(out_fname, "wb") as out:
+                        out.write(r.content)
+                    new_ids.append(file_id)
+                    debug_log(f"    🟡 Downloaded file: {out_fname}")
+                except Exception as e:
+                    debug_log(f"  🔴 Error downloading file {file_id}: {e}")
 
         if new_ids:
             cached_ids.update(new_ids)
