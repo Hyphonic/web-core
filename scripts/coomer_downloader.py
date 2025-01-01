@@ -73,30 +73,42 @@ def collect_creator_posts(creator, session, cached_ids, target_posts=50, disable
                     page_stats['cached'] += 1
                     continue
                     
-
-    print("\n📊 Download Results:")
-    print("=" * 50)
-    print(f"💾 Files Downloaded: {successful_downloads}")
-    print(f"📁 Unique Posts (IDs): {len(set(unique_tasks.values()))}")
-    print(f"📈 Average files per post: {successful_downloads / len(set(unique_tasks.values())):.1f}")
+                page_stats['new'] += 1
+                paths = set()
+                if 'file' in item and 'path' in item['file']:
+                    paths.add(item['file']['path'])
+                for att in item.get('attachments', []):
+                    p = att.get('path')
+                    if p:
+                        paths.add(p)
+                
+                if paths:  # Only count posts with media
+                    collected_posts[file_id] = []
+                    for p in paths:
+                        download_url = "https://coomer.su" + p
+                        creator_dir = os.path.join("cache", creator)
+                        out_fname = os.path.join(creator_dir, f"{file_id}-{os.path.basename(p)}")
+                        collected_posts[file_id].append((download_url, out_fname))
+                        total_new_posts += 1
+                        
+                if total_new_posts >= target_posts:
+                    break
+            
+            debug_log(f"  📄 Page {page}: Found {page_stats['new']} new posts, skipped {page_stats['cached']} cached posts", show_debug)
+                
+            page += 1
+            offset += 50
+            
+        except Exception as e:
+            debug_log(f"🔴 Failed to fetch page {page} for {creator}: {e}", show_debug)
+            break
     
-    # Count files per creator
-    creator_stats = {}
-    for (url, fname), file_id in unique_tasks.items():
-        creator = os.path.basename(os.path.dirname(fname))
-        creator_stats[creator] = creator_stats.get(creator, 0) + 1
-
-    print("\n👤 Per Creator Breakdown:")
-    print("-" * 50)
-    for creator, count in creator_stats.items():
-        print(f"  • {creator}: {count} files")
+    debug_log(f"📊 Creator {creator} summary:", show_debug)
+    debug_log(f"  • Pages checked: {total_pages_checked}", show_debug)
+    debug_log(f"  • Posts checked: {total_checked_posts}", show_debug)
+    debug_log(f"  • New posts found: {len(collected_posts)}", show_debug)
     
-    print("\n📈 Final Totals:")
-    print("-" * 50)
-    print(f"  • Total Files Downloaded: {successful_downloads}")
-    print(f"  • Unique Posts Added to Cache: {len(set(unique_tasks.values()))}")
-    print(f"  • Total Cache Size: {len(cached_ids)}")
-    print("=" * 50 + "\n")
+    return collected_posts
 
 def check_disk_space(path="."):
     """Check if enough disk space is available."""
