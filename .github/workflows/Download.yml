@@ -1,8 +1,6 @@
 name: Download Posts
 
 on:
-  schedule:
-    - cron: '*/15 * * * *'
   workflow_dispatch:
     inputs:
       disable_cache_check:
@@ -299,40 +297,19 @@ jobs:
           import json
           import requests
           import concurrent.futures
-          import shutil  # Imported for disk space checks
           from requests.adapters import HTTPAdapter
           from requests.packages.urllib3.util.retry import Retry
-
           disable_cache_check = False
           show_debug = True
-          creators = [
-              "darcyxnycole", "belledelphine", "sweetiefox_of", "soogsx",
-              "morgpie", "w0llip", "summertimejames", "f1nn5ter",
-              "jamelizzzz", "lilijunex", "lunluns"
-          ]  # Add more creators as needed
+          creators = ["darcyxnycole", "belledelphine", "sweetiefox_of", "soogsx", "morgpie", "w0llip", "summertimejames", "f1nn5ter", "jamelizzzz", "lilijunex", "lunluns"]  # Add more creators as needed
           o_limit = 50  # Number of posts to fetch per creator
           cache_file = "cache/coomer_ids.json"
           TIMEOUT_SECONDS = 300  # 5 minutes
           MAX_WORKERS = 8        # Adjust as needed
-          MAX_URLS = 750         # Maximum number of URLs to download
-
           def debug_log(msg):
               if show_debug:
                   print(msg)
-
-          def check_free_space(required_bytes=1_000_000):
-              """Check if there is at least the required number of bytes free."""
-              total, used, free = shutil.disk_usage(os.getcwd())
-              if free < required_bytes:
-                  debug_log(f"🔴 Insufficient disk space. Required: {required_bytes} bytes, Available: {free} bytes.")
-                  return False
-              return True
-
           def download_file(download_url, out_fname, file_id):
-              # Check disk space before downloading each file
-              if not check_free_space():
-                  debug_log(f"🔴 Not enough free space to download {file_id}. Skipping.")
-                  return False
               try:
                   r = session.get(download_url, timeout=TIMEOUT_SECONDS)
                   r.raise_for_status()
@@ -342,35 +319,21 @@ jobs:
               except Exception as e:
                   debug_log(f"  🔴 Error downloading file {file_id}: {e}")
                   return False
-
-          # Initial disk space check before starting downloads
-          if not check_free_space():
-              debug_log("🔴 Exiting due to insufficient disk space.")
-              exit(1)
-
-          # Load cached IDs
           try:
               with open(cache_file, "r") as f:
                   cached_ids = set(json.load(f))
-              debug_log(f"🟢 ({len(cached_ids)}) Loaded cached Coomer IDs.")
+              debug_log("🟢 Loaded cached Coomer IDs.")
           except:
               cached_ids = set()
               debug_log("🔴 No cache found. Starting fresh.")
-
           unique_tasks = {}
           new_ids = []
-
-          # Set up the requests session with retries
           session = requests.Session()
           retry = Retry(total=3, backoff_factor=1, status_forcelist=[502, 503, 504])
           adapter = HTTPAdapter(max_retries=retry)
           session.mount('http://', adapter)
           session.mount('https://', adapter)
-
           for creator in creators:
-              if len(unique_tasks) >= MAX_URLS:
-                  debug_log(f"🟢 Reached the maximum limit of {MAX_URLS} URLs. Stopping task collection.")
-                  break
               coomer_url = f"https://coomer.su/api/v1/onlyfans/user/{creator}?o={o_limit}"
               debug_log(f"🟢 Fetching data from {coomer_url}")
               try:
@@ -380,18 +343,12 @@ jobs:
               except Exception as e:
                   debug_log(f"🔴 Failed to fetch data for {creator}: {e}")
                   continue
-
               for item in items:
-                  if len(unique_tasks) >= MAX_URLS:
-                      debug_log(f"🟢 Reached the maximum limit of {MAX_URLS} URLs. Stopping task collection.")
-                      break
                   file_id = str(item.get('id', ''))
                   if file_id in cached_ids and not disable_cache_check:
                       debug_log(f"  🔵 Skipping cached file: {file_id}")
                       continue
-
                   debug_log(f"  🟡 Found new post: {file_id}")
-
                   paths = set()
                   if 'file' in item and 'path' in item['file']:
                       paths.add(item['file']['path'])
@@ -399,30 +356,18 @@ jobs:
                       p = att.get('path')
                       if p:
                           paths.add(p)
-
                   for p in paths:
-                      if len(unique_tasks) >= MAX_URLS:
-                          debug_log(f"🟢 Reached the maximum limit of {MAX_URLS} URLs. Stopping task collection.")
-                          break
                       download_url = "https://coomer.su" + p
+                      # Create directories per creator
                       creator_dir = os.path.join("cache", creator)
                       os.makedirs(creator_dir, exist_ok=True)
                       out_fname = os.path.join(creator_dir, f"{file_id}-{os.path.basename(p)}")
-
-                      if (download_url, out_fname) not in unique_tasks:
-                          unique_tasks[(download_url, out_fname)] = file_id
-
-              # Check disk space after processing each creator
-              if not check_free_space():
-                  debug_log("🔴 Insufficient disk space, stopping Coomer downloads.")
-                  break
-
-          tasks = list(unique_tasks.items())  # remove slicing
-          tasks = [(k[0], k[1], v) for (k, v), v in tasks]
+                      # Deduplicate by url/out_fname across all creators
+                      unique_tasks[(download_url, out_fname)] = file_id
+          tasks = [(k[0], k[1], v) for k, v in unique_tasks.items()]
           total_tasks = len(tasks)
           debug_log(f"🟢 Starting parallel downloads for {total_tasks} unique files.")
           completed = 0
-
           with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
               future_map = {
                   executor.submit(download_file, url, fname, fid): (url, fname, fid)
