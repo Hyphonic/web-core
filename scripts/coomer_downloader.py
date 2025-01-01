@@ -102,6 +102,31 @@ def collect_creator_posts(creator, session, cached_ids, target_posts=50, disable
     
     return collected_posts
 
+def display_download_stats(creators_data, unique_tasks, cached_ids, show_debug=True):
+    """Display statistics about the upcoming download."""
+    if not show_debug:
+        return
+
+    print("\n📊 Download Statistics:")
+    print("=" * 50)
+    print(f"💾 Cached posts: {len(cached_ids)}")
+    
+    creator_stats = {}
+    for (url, fname), file_id in unique_tasks.items():
+        creator = os.path.basename(os.path.dirname(fname))
+        creator_stats[creator] = creator_stats.get(creator, 0) + 1
+
+    print("\n👤 Per Creator Breakdown:")
+    print("-" * 50)
+    for creator, count in creator_stats.items():
+        print(f"  • {creator}: {count} files")
+    
+    print("\n📈 Totals:")
+    print("-" * 50)
+    print(f"  • Creators to process: {len(creator_stats)}")
+    print(f"  • Total URLs to download: {len(unique_tasks)}")
+    print("=" * 50 + "\n")
+
 def main():
     args = parse_args()
     cache_file = "cache/coomer_ids.json"
@@ -144,6 +169,9 @@ def main():
         if len(unique_tasks) >= args.max_urls:
             debug_log(f"🟢 Reached maximum URL limit of {args.max_urls}", args.debug)
             break
+
+    # Display download statistics
+    display_download_stats(CREATORS, unique_tasks, cached_ids, args.debug)
 
     # Convert tasks for parallel download
     tasks = [(k[0], k[1], v) for k, v in unique_tasks.items()]
