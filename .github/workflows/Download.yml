@@ -361,7 +361,7 @@ jobs:
           try:
               with open(cache_file, "r") as f:
                   cached_ids = set(json.load(f))
-              debug_log("🟢 Loaded cached Coomer IDs.")
+              debug_log(f"🟢 Loaded {len(cached_ids)} cached Coomer IDs.")
           except:
               cached_ids = set()
               debug_log("🔴 No cache found. Starting fresh.")
@@ -439,11 +439,16 @@ jobs:
                   success = future.result()
                   completed += 1
                   percent = int((completed / total_tasks) * 100)
+
+                  # Calculate used storage percentage
+                  total_disk, used_disk, free_disk = shutil.disk_usage(os.getcwd())
+                  storage_used_percent = int((used_disk / total_disk) * 100)
+
                   if success:
                       new_ids.append(fid)
-                      debug_log(f"  🟡 ({percent}%) Downloaded {fid} -> {fname}")
+                      debug_log(f"  🟡 ({percent}%) Downloaded {fid} -> {fname}, Storage: {storage_used_percent}% used")
                   else:
-                      debug_log(f"  🔴 ({percent}%) Failed {fid}")
+                      debug_log(f"  🔴 ({percent}%) Failed {fid}, Storage: {storage_used_percent}% used")
 
           if new_ids:
               cached_ids.update(new_ids)
