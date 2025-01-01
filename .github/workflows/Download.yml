@@ -1,8 +1,6 @@
 name: Download Posts
 
 on:
-  schedule:
-    - cron: '*/10 * * * *'
   workflow_dispatch:
     inputs:
       disable_cache_check:
@@ -28,7 +26,7 @@ on:
       max_urls:
         description: 'Maximum total URLs to download'
         required: false
-        default: '150'
+        default: '750'
         type: string
       creators:
         description: 'Comma-separated list of creators (leave empty for default)'
@@ -209,11 +207,6 @@ jobs:
           echo "🟢 Listing Coomer files in cache..."
           tree cache
           echo "🟢 File listing complete."
-      - name: 📤 Upload Cache as Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: coomer-cache
-          path: cache/
 
   send-to-telegram:
     needs: download-memes
