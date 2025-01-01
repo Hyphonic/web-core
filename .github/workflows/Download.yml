@@ -178,7 +178,7 @@ jobs:
             $([ "${{ inputs.show_debug }}" == "true" ] && echo "--debug") \
             $([ "${{ inputs.disable_cache_check }}" == "true" ] && echo "--disable-cache") \
             --target-posts "${{ inputs.target_posts || '50' }}" \
-            --max-urls "${{ inputs.max_urls || '750' }}" \
+            --max-urls "${{ inputs.max_urls || '150' }}" \
             $([ ! -z "${{ inputs.creators }}" ] && echo "--creators '${{ inputs.creators }}'") \
             $([ "${{ inputs.delete_cache }}" == "true" ] && echo "--delete-cache")
       - name: 🌐 Upload Coomer Posts with Rclone
