@@ -56,14 +56,10 @@ jobs:
           echo "🟢 Installing PRAW, Requests, and yt_dlp..."
           pip install praw requests yt-dlp
       - name: 🔧 Install Rclone
-        run: |
-          echo "🟢 Installing Rclone..."
-          curl https://rclone.org/install.sh | sudo bash
-      - name: 📂 Set Up Rclone Config
-        run: |
-          echo "🟢 Setting up Rclone configuration..."
-          mkdir -p ~/.config/rclone
-          echo "${{ secrets.PIXELDRAIN_CONF }}" > ~/.config/rclone/rclone.conf
+        uses: AnimMouse/setup-rclone@v1
+        with:
+          rclone_config: ${{ secrets.PIXELDRAIN_CONF }}
+          disable_base64: true
       - name: ⏬ Download Reddit Posts
         id: download-memes
         env:
@@ -280,14 +276,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests
       - name: 🔧 Install Rclone
-        run: |
-          echo "🟢 Installing Rclone..."
-          curl https://rclone.org/install.sh | sudo bash
-      - name: 📂 Set Up Rclone Config
-        run: |
-          echo "🟢 Setting up Rclone configuration..."
-          mkdir -p ~/.config/rclone
-          echo "${{ secrets.PIXELDRAIN_CONF }}" > ~/.config/rclone/rclone.conf
+        uses: AnimMouse/setup-rclone@v1
+        with:
+          rclone_config: ${{ secrets.PIXELDRAIN_CONF }}
+          disable_base64: true
       - name: ⏬ Download Coomer Posts (Parallel)
         run: |
           echo "🟢 Starting Coomer download process with parallel requests..."
@@ -369,10 +361,13 @@ jobs:
           if len(unique_tasks) > MAX_URLS:
               debug_log(f"🟢 Limiting downloads to first {MAX_URLS} URLs")
               unique_tasks = dict(list(unique_tasks.items())[:MAX_URLS])
+          
           tasks = [(k[0], k[1], v) for k, v in unique_tasks.items()]
           total_tasks = len(tasks)
           debug_log(f"🟢 Starting parallel downloads for {total_tasks} unique files.")
           completed = 0
+          successful_ids = set()  # Track only successfully downloaded IDs
+          
           with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
               future_map = {
                   executor.submit(download_file, url, fname, fid): (url, fname, fid)
@@ -384,15 +379,16 @@ jobs:
                   completed += 1
                   percent = int((completed / total_tasks) * 100)
                   if success:
-                      new_ids.append(fid)
+                      successful_ids.add(fid)  # Only add successfully downloaded IDs
                       debug_log(f"  🟡 ({percent}%) Downloaded {fid} -> {fname}")
                   else:
                       debug_log(f"  🔴 ({percent}%) Failed {fid}")
-          if new_ids:
-              cached_ids.update(new_ids)
+          
+          if successful_ids:  # Update cache with only successful downloads
+              cached_ids.update(successful_ids)
               with open(cache_file, "w") as f:
                   json.dump(sorted(cached_ids), f)
-              debug_log(f"🟢 Downloaded {len(new_ids)} new Coomer files.")
+              debug_log(f"🟢 Downloaded and cached {len(successful_ids)} new Coomer files.")
           else:
               debug_log("🟠 No New Items Found!")
           EOF
