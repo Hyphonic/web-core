@@ -314,6 +314,7 @@ jobs:
           cache_file = "cache/coomer_ids.json"
           TIMEOUT_SECONDS = 300  # 5 minutes
           MAX_WORKERS = 8        # Adjust as needed
+          MAX_URLS = 750         # Maximum number of URLs to download
 
           def debug_log(msg):
               if show_debug:
@@ -367,6 +368,9 @@ jobs:
           session.mount('https://', adapter)
 
           for creator in creators:
+              if len(unique_tasks) >= MAX_URLS:
+                  debug_log(f"🟢 Reached the maximum limit of {MAX_URLS} URLs. Stopping task collection.")
+                  break
               coomer_url = f"https://coomer.su/api/v1/onlyfans/user/{creator}?o={o_limit}"
               debug_log(f"🟢 Fetching data from {coomer_url}")
               try:
@@ -378,6 +382,9 @@ jobs:
                   continue
 
               for item in items:
+                  if len(unique_tasks) >= MAX_URLS:
+                      debug_log(f"🟢 Reached the maximum limit of {MAX_URLS} URLs. Stopping task collection.")
+                      break
                   file_id = str(item.get('id', ''))
                   if file_id in cached_ids and not disable_cache_check:
                       debug_log(f"  🔵 Skipping cached file: {file_id}")
@@ -392,6 +399,9 @@ jobs:
                           paths.add(p)
 
                   for p in paths:
+                      if len(unique_tasks) >= MAX_URLS:
+                          debug_log(f"🟢 Reached the maximum limit of {MAX_URLS} URLs. Stopping task collection.")
+                          break
                       download_url = "https://coomer.su" + p
                       creator_dir = os.path.join("cache", creator)
                       os.makedirs(creator_dir, exist_ok=True)
@@ -406,7 +416,8 @@ jobs:
                   debug_log("🔴 Insufficient disk space, stopping Coomer downloads.")
                   break
 
-          tasks = [(k[0], k[1], v) for k, v in unique_tasks.items()]
+          tasks = list(unique_tasks.items())[:MAX_URLS]
+          tasks = [(k[0], k[1], v) for (k, v), v in tasks]
           total_tasks = len(tasks)
           debug_log(f"🟢 Starting parallel downloads for {total_tasks} unique files.")
           completed = 0
