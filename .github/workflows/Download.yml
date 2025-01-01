@@ -390,6 +390,8 @@ jobs:
                       debug_log(f"  🔵 Skipping cached file: {file_id}")
                       continue
 
+                  debug_log(f"  🟡 Found new post: {file_id}")
+
                   paths = set()
                   if 'file' in item and 'path' in item['file']:
                       paths.add(item['file']['path'])
@@ -407,7 +409,6 @@ jobs:
                       os.makedirs(creator_dir, exist_ok=True)
                       out_fname = os.path.join(creator_dir, f"{file_id}-{os.path.basename(p)}")
 
-                      # Deduplicate by url/out_fname across all creators
                       if (download_url, out_fname) not in unique_tasks:
                           unique_tasks[(download_url, out_fname)] = file_id
 
@@ -416,7 +417,7 @@ jobs:
                   debug_log("🔴 Insufficient disk space, stopping Coomer downloads.")
                   break
 
-          tasks = list(unique_tasks.items())[:MAX_URLS]
+          tasks = list(unique_tasks.items())  # remove slicing
           tasks = [(k[0], k[1], v) for (k, v), v in tasks]
           total_tasks = len(tasks)
           debug_log(f"🟢 Starting parallel downloads for {total_tasks} unique files.")
