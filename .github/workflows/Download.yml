@@ -91,6 +91,7 @@ jobs:
           import sys
           from requests.adapters import HTTPAdapter
           from requests.packages.urllib3.util.retry import Retry
+          import shutil
           
           client_id = os.getenv("CLIENT_ID")
           client_secret = os.getenv("CLIENT_SECRET")
@@ -313,6 +314,7 @@ jobs:
           import json
           import requests
           import concurrent.futures
+          import shutil
           from requests.adapters import HTTPAdapter
           from requests.packages.urllib3.util.retry import Retry
 
@@ -329,6 +331,9 @@ jobs:
                   print(msg)
 
           def download_file(download_url, out_fname, file_id):
+              if not check_free_space(required_bytes=500_000_000):  # Ensure at least ~500MB free before download
+                  debug_log(f"🔴 Not enough free space to download {file_id}. Skipping.")
+                  return False
               try:
                   r = session.get(download_url, timeout=TIMEOUT_SECONDS)
                   r.raise_for_status()
@@ -338,6 +343,19 @@ jobs:
               except Exception as e:
                   debug_log(f"  🔴 Error downloading file {file_id}: {e}")
                   return False
+
+          def check_free_space(required_bytes=1_073_741_824):
+              """Check if there is at least 1 GB of free disk space."""
+              total, used, free = shutil.disk_usage(os.getcwd())
+              if free < required_bytes:
+                  debug_log(f"🔴 Insufficient disk space. Required: {required_bytes} bytes, Available: {free} bytes.")
+                  return False
+              return True
+
+          # Check for sufficient disk space before proceeding
+          if not check_free_space():
+              debug_log("🔴 Exiting due to insufficient disk space.")
+              exit(1)
 
           try:
               with open(cache_file, "r") as f:
@@ -357,38 +375,50 @@ jobs:
           session.mount('https://', adapter)
 
           for creator in creators:
-              coomer_url = f"https://coomer.su/api/v1/onlyfans/user/{creator}?o={o_limit}"
-              debug_log(f"🟢 Fetching data from {coomer_url}")
-              try:
-                  resp = session.get(coomer_url, timeout=TIMEOUT_SECONDS)
-                  resp.raise_for_status()
-                  items = resp.json()
-              except Exception as e:
-                  debug_log(f"🔴 Failed to fetch data for {creator}: {e}")
-                  continue
+              page = 0
+              new_posts = 0
+              while True:
+                  offset = page * o_limit
+                  coomer_url = f"https://coomer.su/api/v1/onlyfans/user/{creator}?o={offset}"
+                  debug_log(f"🟢 Fetching data from {coomer_url} with page {page}...")
+                  try:
+                      resp = session.get(coomer_url, timeout=TIMEOUT_SECONDS)
+                      resp.raise_for_status()
+                      items = resp.json()
+                      if not items:
+                          break
+                  except Exception as e:
+                      debug_log(f"🔴 Failed to fetch data for {creator} page {page}: {e}")
+                      break
 
-              for item in items:
-                  file_id = str(item.get('id', ''))
-                  if file_id in cached_ids and not disable_cache_check:
-                      debug_log(f"  🔵 Skipping cached file: {file_id}")
-                      continue
+                  for item in items:
+                      file_id = str(item.get('id', ''))
+                      if file_id in cached_ids and not disable_cache_check:
+                          debug_log(f"  🔵 Skipping cached file: {file_id}")
+                          continue
 
-                  paths = set()
-                  if 'file' in item and 'path' in item['file']:
-                      paths.add(item['file']['path'])
-                  for att in item.get('attachments', []):
-                      p = att.get('path')
-                      if p:
-                          paths.add(p)
+                      paths = set()
+                      if 'file' in item and 'path' in item['file']:
+                          paths.add(item['file']['path'])
+                      for att in item.get('attachments', []):
+                          p = att.get('path')
+                          if p:
+                              paths.add(p)
 
-                  for p in paths:
-                      download_url = "https://coomer.su" + p
-                      # Create directories per creator
-                      creator_dir = os.path.join("cache", creator)
-                      os.makedirs(creator_dir, exist_ok=True)
-                      out_fname = os.path.join(creator_dir, f"{file_id}-{os.path.basename(p)}")
-                      # Deduplicate by url/out_fname across all creators
-                      unique_tasks[(download_url, out_fname)] = file_id
+                      for p in paths:
+                          download_url = "https://coomer.su" + p
+                          # Create directories per creator
+                          creator_dir = os.path.join("cache", creator)
+                          os.makedirs(creator_dir, exist_ok=True)
+                          out_fname = os.path.join(creator_dir, f"{file_id}-{os.path.basename(p)}")
+                          # Deduplicate by url/out_fname across all creators
+                          unique_tasks[(download_url, out_fname)] = file_id
+                          new_posts += 1
+                          if new_posts >= 50:
+                              break
+                  if new_posts >= 50 or len(items) < o_limit:
+                      break
+                  page += 1
 
           tasks = [(k[0], k[1], v) for k, v in unique_tasks.items()]
           total_tasks = len(tasks)
