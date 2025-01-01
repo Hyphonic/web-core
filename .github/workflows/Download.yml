@@ -320,20 +320,27 @@ jobs:
 
           disable_cache_check = False
           show_debug = True
-          creators = ["darcyxnycole", "belledelphine", "sweetiefox_of", "soogsx", "morgpie", "w0llip", "summertimejames", "f1nn5ter", "jamelizzzz", "lilijunex", "lunluns"]  # Add more creators as needed
-          o_limit = 50  # Number of posts to fetch per creator
+          creators = ["darcyxnycole","belledelphine","sweetiefox_of","soogsx","morgpie","w0llip","summertimejames","f1nn5ter","jamelizzzz","lilijunex","lunluns"]
+          o_limit = 50
+          MAX_NEW_POSTS_PER_RUN = 50  # Download up to 50 new posts each run
           cache_file = "cache/coomer_ids.json"
-          TIMEOUT_SECONDS = 300  # 5 minutes
-          MAX_WORKERS = 8        # Adjust as needed
-          MAX_POSTS_PER_CREATOR = 10  # Maximum number of posts to download per creator
+          TIMEOUT_SECONDS = 300
+          MAX_WORKERS = 8
 
           def debug_log(msg):
               if show_debug:
                   print(msg)
 
+          def check_free_space(required_bytes=1_073_741_824):
+              total, used, free = shutil.disk_usage(os.getcwd())
+              if free < required_bytes:
+                  debug_log(f"🔴 Insufficient disk space. Required: {required_bytes}, Available: {free}.")
+                  return False
+              return True
+
           def download_file(download_url, out_fname, file_id):
-              if not check_free_space(required_bytes=500_000_000):  # Ensure at least ~500MB free before download
-                  debug_log(f"🔴 Not enough free space to download {file_id}. Skipping.")
+              # Stop if out of storage
+              if not check_free_space():
                   return False
               try:
                   r = session.get(download_url, timeout=TIMEOUT_SECONDS)
@@ -345,14 +352,12 @@ jobs:
                   debug_log(f"  🔴 Error downloading file {file_id}: {e}")
                   return False
 
-          def check_free_space(required_bytes=1_073_741_824):
-              """Check if there is at least 1 GB of free disk space."""
-              total, used, free = shutil.disk_usage(os.getcwd())
-              if free < required_bytes:
-                  debug_log(f"🔴 Insufficient disk space. Required: {required_bytes} bytes, Available: {free} bytes.")
-                  return False
-              return True
+          # Check storage before starting
+          if not check_free_space():
+              debug_log("🔴 Exiting due to insufficient disk space.")
+              exit(1)
 
+          # Load cached IDs
           try:
               with open(cache_file, "r") as f:
                   cached_ids = set(json.load(f))
@@ -370,10 +375,11 @@ jobs:
           session.mount('http://', adapter)
           session.mount('https://', adapter)
 
+          # Gather 50 new posts per creator
           for creator in creators:
               page = 0
               new_posts = 0
-              while True:
+              while new_posts < MAX_NEW_POSTS_PER_RUN:
                   offset = page * o_limit
                   coomer_url = f"https://coomer.su/api/v1/onlyfans/user/{creator}?o={offset}"
                   debug_log(f"🟢 Fetching data from {coomer_url} with page {page}...")
@@ -381,7 +387,7 @@ jobs:
                       resp = session.get(coomer_url, timeout=TIMEOUT_SECONDS)
                       resp.raise_for_status()
                       items = resp.json()
-                      if not items:
+                      if not items: 
                           break
                   except Exception as e:
                       debug_log(f"🔴 Failed to fetch data for {creator} page {page}: {e}")
@@ -393,33 +399,35 @@ jobs:
                           debug_log(f"  🔵 Skipping cached file: {file_id}")
                           continue
 
+                      # Gather all media paths
                       paths = set()
                       if 'file' in item and 'path' in item['file']:
                           paths.add(item['file']['path'])
                       for att in item.get('attachments', []):
                           p = att.get('path')
-                          if p:
+                          if p: 
                               paths.add(p)
 
                       for p in paths:
                           download_url = "https://coomer.su" + p
-                          # Create directories per creator
                           creator_dir = os.path.join("cache", creator)
                           os.makedirs(creator_dir, exist_ok=True)
                           out_fname = os.path.join(creator_dir, f"{file_id}-{os.path.basename(p)}")
-                          # Deduplicate by url/out_fname across all creators
-                          unique_tasks[(download_url, out_fname)] = file_id
-                          new_posts += 1
-                          if new_posts >= MAX_POSTS_PER_CREATOR:
-                              break
-                  if new_posts >= MAX_POSTS_PER_CREATOR or len(items) < o_limit:
+
+                          # Keep track of unique downloads
+                          if (download_url, out_fname) not in unique_tasks:
+                              unique_tasks[(download_url, out_fname)] = file_id
+                              new_posts += 1
+                              if new_posts >= MAX_NEW_POSTS_PER_RUN:
+                                  break
+                  if len(items) < o_limit:
                       break
                   page += 1
 
           tasks = [(k[0], k[1], v) for k, v in unique_tasks.items()]
           total_tasks = len(tasks)
-
           debug_log(f"🟢 Starting parallel downloads for {total_tasks} unique files.")
+
           completed = 0
           with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
               future_map = {
