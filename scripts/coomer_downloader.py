@@ -1,5 +1,6 @@
 import os
 import json
+import shutil
 import requests
 import concurrent.futures
 import argparse
@@ -15,6 +16,7 @@ CREATORS = [
     "morgpie", "w0llip", "summertimejames", "f1nn5ter",
     "jamelizzzz", "lilijunex", "lunluns"
 ]
+MIN_DISK_SPACE = 2 * 1024 * 1024 * 1024  # 2GB in bytes
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Coomer.party Downloader')
@@ -45,6 +47,8 @@ def collect_creator_posts(creator, session, cached_ids, target_posts=50, disable
     page = 1
     offset = 50  # Starting offset
     total_new_posts = 0
+    total_pages_checked = 0
+    total_checked_posts = 0
 
     while total_new_posts < target_posts:
         coomer_url = f"https://coomer.su/api/v1/onlyfans/user/{creator}?o={offset}"
@@ -55,11 +59,14 @@ def collect_creator_posts(creator, session, cached_ids, target_posts=50, disable
             resp.raise_for_status()
             items = resp.json()
             
-            if not items:  # No more posts available
-                debug_log(f"🔵 No more posts found for {creator}", show_debug)
+            if not items:  # Truly no more posts available
+                debug_log(f"🔵 Reached end of available posts for {creator} after {total_pages_checked} pages", show_debug)
                 break
                 
+            total_pages_checked += 1
+            total_checked_posts += len(items)
             page_stats = {'new': 0, 'cached': 0, 'total': len(items)}
+            
             for item in items:
                 file_id = str(item.get('id', ''))
                 if file_id in cached_ids and not disable_cache_check:
@@ -85,14 +92,11 @@ def collect_creator_posts(creator, session, cached_ids, target_posts=50, disable
                         total_new_posts += 1
                         
                 if total_new_posts >= target_posts:
+                    debug_log(f"🟢 Found target {target_posts} posts for {creator}", show_debug)
                     break
             
-            # Show page summary instead of individual files
+            # Show page summary but don't break on fully cached page
             debug_log(f"  📄 Page {page}: Found {page_stats['new']} new posts, skipped {page_stats['cached']} cached posts", show_debug)
-            
-            if page_stats['new'] == 0:
-                debug_log(f"🔵 No new posts found on page {page} for {creator}", show_debug)
-                break
                 
             page += 1
             offset += 50
@@ -100,6 +104,11 @@ def collect_creator_posts(creator, session, cached_ids, target_posts=50, disable
         except Exception as e:
             debug_log(f"🔴 Failed to fetch page {page} for {creator}: {e}", show_debug)
             break
+    
+    debug_log(f"📊 Creator {creator} summary:", show_debug)
+    debug_log(f"  • Pages checked: {total_pages_checked}", show_debug)
+    debug_log(f"  • Posts checked: {total_checked_posts}", show_debug)
+    debug_log(f"  • New posts found: {len(collected_posts)}", show_debug)
     
     return collected_posts
 
@@ -208,10 +217,21 @@ def display_download_stats(creators_data, unique_tasks, cached_ids, successful_d
     print(f"  • Total Cache Size: {len(cached_ids)}")
     print("=" * 50 + "\n")
 
+def check_disk_space(path="."):
+    """Check if enough disk space is available."""
+    total, used, free = shutil.disk_usage(path)
+    return free > MIN_DISK_SPACE, free / (1024 * 1024 * 1024)  # Return bool and GB free
+
 def main():
     args = parse_args()
     cache_file = "cache/coomer_ids.json"
     os.makedirs("cache", exist_ok=True)
+
+    # Check disk space before starting
+    has_space, gb_free = check_disk_space("cache")
+    if not has_space:
+        debug_log(f"🔴 Not enough disk space! Only {gb_free:.1f}GB free. Need at least 2GB.", args.debug)
+        return
 
     # Load cache
     try:
@@ -270,15 +290,23 @@ def main():
             for (url, fname, fid) in tasks
         }
         for future in concurrent.futures.as_completed(future_map):
+            # Check disk space every 10 downloads
+            if completed % 10 == 0:
+                has_space, gb_free = check_disk_space("cache")
+                if not has_space:
+                    debug_log(f"🔴 Stopping downloads - Only {gb_free:.1f}GB free space left!", args.debug)
+                    break
+
             url, fname, fid = future_map[future]
             success = future.result()
             completed += 1
             if success:
                 successful_downloads += 1
                 successful_ids.add(fid)
-                debug_log(f"  🟡 ({completed}/{total_tasks}) Downloaded {fid} -> {fname}", args.debug)
+                percentage = round((completed / total_tasks) * 100)
+                debug_log(f"  🟡 ({completed}/{total_tasks}) [{percentage}] Downloaded {fid} -> {fname}", args.debug)
             else:
-                debug_log(f"  🔴 ({completed}/{total_tasks}) Failed {fid}", args.debug)
+                debug_log(f"  🔴 ({completed}/{total_tasks}) [{percentage}] Failed {fid}", args.debug)
 
     # Display final statistics
     display_download_results(unique_tasks, cached_ids, successful_downloads, successful_ids, args.debug)
