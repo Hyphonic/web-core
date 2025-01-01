@@ -9,7 +9,7 @@ from requests.packages.urllib3.util.retry import Retry
 # Constants and Configuration
 TIMEOUT_SECONDS = 300  # 5 minutes
 MAX_WORKERS = 8
-MAX_URLS = 250
+MAX_URLS = 750
 CREATORS = [
     "darcyxnycole", "belledelphine", "sweetiefox_of", "soogsx",
     "morgpie", "w0llip", "summertimejames", "f1nn5ter",
@@ -102,15 +102,94 @@ def collect_creator_posts(creator, session, cached_ids, target_posts=50, disable
     
     return collected_posts
 
-def display_download_stats(creators_data, unique_tasks, cached_ids, show_debug=True):
-    """Display statistics about the upcoming download."""
+def display_download_preview(unique_tasks, cached_ids, show_debug=True):
+    """Display preview of upcoming downloads."""
     if not show_debug:
         return
 
-    print("\n📊 Download Statistics:")
+    print("\n📊 Download Preview:")
     print("=" * 50)
-    print(f"💾 Cached posts: {len(cached_ids)}")
     
+    # Group by creator and count files
+    creator_stats = {}
+    creator_posts = {}
+    for (url, fname), file_id in unique_tasks.items():
+        creator = os.path.basename(os.path.dirname(fname))
+        creator_stats[creator] = creator_stats.get(creator, 0) + 1
+        if creator not in creator_posts:
+            creator_posts[creator] = set()
+        creator_posts[creator].add(file_id)
+
+    print("\n👤 Per Creator Breakdown:")
+    print("-" * 50)
+    for creator in creator_stats:
+        files = creator_stats[creator]
+        posts = len(creator_posts[creator])
+        ratio = files / posts if posts > 0 else 0
+        print(f"  • {creator}:")
+        print(f"    - Files to download: {files}")
+        print(f"    - Unique posts: {posts}")
+        print(f"    - Files per post: {ratio:.1f}")
+    
+    print("\n📈 Preview Totals:")
+    print("-" * 50)
+    total_files = sum(creator_stats.values())
+    total_posts = sum(len(posts) for posts in creator_posts.values())
+    print(f"  • Total files to download: {total_files}")
+    print(f"  • Total unique posts: {total_posts}")
+    print(f"  • Current cache size: {len(cached_ids)}")
+    print("=" * 50 + "\n")
+
+def display_download_results(unique_tasks, cached_ids, successful_downloads, successful_ids, show_debug=True):
+    """Display final download results."""
+    if not show_debug:
+        return
+
+    print("\n📊 Download Results:")
+    print("=" * 50)
+    
+    # Group results by creator
+    creator_stats = {}
+    creator_success = {}
+    for (url, fname), file_id in unique_tasks.items():
+        creator = os.path.basename(os.path.dirname(fname))
+        if creator not in creator_stats:
+            creator_stats[creator] = {'total': 0, 'success': 0, 'posts': set()}
+        creator_stats[creator]['total'] += 1
+        if file_id in successful_ids:
+            creator_stats[creator]['success'] += 1
+            creator_stats[creator]['posts'].add(file_id)
+
+    print("\n👤 Per Creator Results:")
+    print("-" * 50)
+    for creator, stats in creator_stats.items():
+        success_rate = (stats['success'] / stats['total'] * 100) if stats['total'] > 0 else 0
+        print(f"  • {creator}:")
+        print(f"    - Successfully downloaded: {stats['success']}/{stats['total']} files ({success_rate:.1f}%)")
+        print(f"    - Unique posts added: {len(stats['posts'])}")
+        if stats['posts']:
+            ratio = stats['success'] / len(stats['posts'])
+            print(f"    - Files per post: {ratio:.1f}")
+
+    print("\n📈 Final Totals:")
+    print("-" * 50)
+    print(f"  • Total files downloaded: {successful_downloads}")
+    print(f"  • New posts added to cache: {len(successful_ids)}")
+    print(f"  • Total cache size: {len(cached_ids)}")
+    print("=" * 50 + "\n")
+
+def display_download_stats(creators_data, unique_tasks, cached_ids, successful_downloads, show_debug=True):
+    """Display detailed download statistics."""
+    if not show_debug:
+        return
+
+    print("\n📊 Download Results:")
+    print("=" * 50)
+    print(f"💾 Files Downloaded: {successful_downloads}")
+    print(f"📁 Unique Posts (IDs): {len(set(unique_tasks.values()))}")
+    print(f"📈 Average files per post: {successful_downloads / len(set(unique_tasks.values())):.1f}")
+    
+    # Count files per creator
     creator_stats = {}
     for (url, fname), file_id in unique_tasks.items():
         creator = os.path.basename(os.path.dirname(fname))
@@ -121,10 +200,11 @@ def display_download_stats(creators_data, unique_tasks, cached_ids, show_debug=T
     for creator, count in creator_stats.items():
         print(f"  • {creator}: {count} files")
     
-    print("\n📈 Totals:")
+    print("\n📈 Final Totals:")
     print("-" * 50)
-    print(f"  • Creators to process: {len(creator_stats)}")
-    print(f"  • Total URLs to download: {len(unique_tasks)}")
+    print(f"  • Total Files Downloaded: {successful_downloads}")
+    print(f"  • Unique Posts Added to Cache: {len(set(unique_tasks.values()))}")
+    print(f"  • Total Cache Size: {len(cached_ids)}")
     print("=" * 50 + "\n")
 
 def main():
@@ -150,6 +230,7 @@ def main():
 
     unique_tasks = {}
     successful_ids = set()
+    successful_downloads = 0
 
     # Collect posts from all creators
     for creator in CREATORS:
@@ -170,14 +251,14 @@ def main():
             debug_log(f"🟢 Reached maximum URL limit of {args.max_urls}", args.debug)
             break
 
-    # Display download statistics
-    display_download_stats(CREATORS, unique_tasks, cached_ids, args.debug)
-
     # Convert tasks for parallel download
     tasks = [(k[0], k[1], v) for k, v in unique_tasks.items()]
     total_tasks = len(tasks)
     debug_log(f"🟢 Starting parallel downloads for {total_tasks} unique files.", args.debug)
     completed = 0
+
+    # Display download preview
+    display_download_preview(unique_tasks, cached_ids, args.debug)
 
     # Download files in parallel
     with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
@@ -191,19 +272,22 @@ def main():
             url, fname, fid = future_map[future]
             success = future.result()
             completed += 1
-            percent = int((completed / total_tasks) * 100)
             if success:
+                successful_downloads += 1
                 successful_ids.add(fid)
-                debug_log(f"  🟡 ({percent}%) Downloaded {fid} -> {fname}", args.debug)
+                debug_log(f"  🟡 ({completed}/{total_tasks}) Downloaded {fid} -> {fname}", args.debug)
             else:
-                debug_log(f"  🔴 ({percent}%) Failed {fid}", args.debug)
+                debug_log(f"  🔴 ({completed}/{total_tasks}) Failed {fid}", args.debug)
+
+    # Display final statistics
+    display_download_results(unique_tasks, cached_ids, successful_downloads, successful_ids, args.debug)
 
     # Update cache with successful downloads
     if successful_ids:
         cached_ids.update(successful_ids)
         with open(cache_file, "w") as f:
             json.dump(sorted(cached_ids), f)
-        debug_log(f"🟢 Downloaded and cached {len(successful_ids)} new Coomer files.", args.debug)
+        debug_log(f"🟢 Added {len(successful_ids)} new posts ({successful_downloads} files) to cache.", args.debug)
     else:
         debug_log("🟠 No New Items Found!", args.debug)
 
