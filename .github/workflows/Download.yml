@@ -62,144 +62,15 @@ jobs:
           disable_base64: true
       - name: ⏬ Download Reddit Posts
         id: download-memes
-        env:
-          CLIENT_ID: ${{ secrets.REDDIT_CLIENT_ID }}
-          CLIENT_SECRET: ${{ secrets.REDDIT_CLIENT_SECRET }}
-          USER_AGENT: ${{ secrets.REDDIT_USER_AGENT }}
-          DISABLE_CACHE_CHECK: ${{ github.event.inputs.disable_cache_check }}
-          SHOW_DEBUG: ${{ github.event.inputs.show_debug || true }}
-          POST_LIMIT: ${{ github.event.inputs.post_limit || '5' }}
         run: |
           echo "🟢 Starting Meme download process..."
-          mkdir -p cache
-          python - <<EOF
-          import os
-          import json
-          import requests
-          import praw
-          import subprocess
-          import sys
-          from requests.adapters import HTTPAdapter
-          from requests.packages.urllib3.util.retry import Retry
-          
-          client_id = os.getenv("CLIENT_ID")
-          client_secret = os.getenv("CLIENT_SECRET")
-          user_agent = os.getenv("USER_AGENT")
-          disable_cache_check = os.getenv("DISABLE_CACHE_CHECK", "false").lower() == "true"
-          show_debug = os.getenv("SHOW_DEBUG", "false").lower() == "true"
-          post_limit = int(os.getenv("POST_LIMIT", "5"))
-          MEME_LIMIT = 250
-          
-          def debug_log(msg):
-              if show_debug:
-                  print(msg)
-          
-          reddit = praw.Reddit(
-              client_id=client_id,
-              client_secret=client_secret,
-              user_agent=user_agent,
-          )
-          debug_log("🟢 Reddit instance created.")
-          
-          cache_file = "cache/meme_ids.json"
-          try:
-              with open(cache_file, "r") as f:
-                  cached_ids = set(json.load(f))
-              debug_log("🟢 Loaded cached Meme IDs.")
-          except:
-              cached_ids = set()
-              debug_log("🔴 No cache found. Starting fresh.")
-          
-          valid_image_exts = ['.png','.jpg','.jpeg','.webp','.gif']
-          subreddits = ["Memes", "ProgrammerHumor", "DankMemes", "DirtyMemes", "RareInsults", "Funny", "Science", "TodayILearned", "MemeVideos", "MeIRL", "Gifs", "Aww", "Videos", "AskReddit", "HolUp", "WTF", "Hmmm", "CoolGuides", "Unexpected", "SweatyPalms", "SpreadSmile", "Pranks"]
-          total_memes = 0
-          new_ids = []
-          memes_metadata = []
-          video_posts = []
-          
-          session = requests.Session()
-          retry = Retry(total=3, backoff_factor=1, status_forcelist=[502, 503, 504])
-          adapter = HTTPAdapter(max_retries=retry)
-          session.mount('http://', adapter)
-          session.mount('https://', adapter)
-          
-          for subreddit in subreddits:
-              if total_memes >= MEME_LIMIT:
-                  debug_log("🔴 Meme limit reached. Stopping download.")
-                  break
-              debug_log(f"🟢 Scraping r/{subreddit} for new posts...")
-              for post in reddit.subreddit(subreddit).new(limit=post_limit):
-                  if not disable_cache_check and post.id in cached_ids:
-                      debug_log(f"  🔵 Skipping cached post: {post.id}")
-                      continue
-                  try:
-                      ext = os.path.splitext(post.url.lower())[1]
-                      if ext in valid_image_exts:
-                          debug_log(f"  🟡 Found image post: {post.id}")
-                          r = session.get(post.url, timeout=10)
-                          r.raise_for_status()
-                          out_fname = os.path.join("cache", f"{post.id}{ext}")
-                          with open(out_fname, "wb") as f:
-                              f.write(r.content)
-                          memes_metadata.append({
-                              "id": post.id,
-                              "title": post.title,
-                              "author": str(post.author) if post.author else "Unknown",
-                              "subreddit": str(post.subreddit),
-                              "upvotes": post.ups,
-                              "filename": os.path.basename(out_fname),
-                              "type": "image"
-                          })
-                          new_ids.append(post.id)
-                          total_memes += 1
-                          debug_log(f"    🟡 Downloaded image: {out_fname}")
-                      else:
-                          debug_log(f"  🟠 Found potential video post: {post.id}")
-                          video_posts.append(post)
-                  except Exception as e:
-                      debug_log(f"  🔴 Error processing post {post.id}: {e}")
-          
-          for post in video_posts:
-              try:
-                  outtmpl = f"cache/{post.id}.%(ext)s"
-                  with open(os.devnull, 'w') as devnull:
-                      result = subprocess.run([
-                          sys.executable, '-m', 'yt_dlp', '--quiet', '--no-warnings', '--ignore-errors',
-                          '--format', 'best', '--merge-output-format', 'mp4', '--output', outtmpl, post.url
-                      ], stdout=devnull, stderr=devnull)
-          
-                  downloaded_file = None
-                  for file in os.listdir("cache"):
-                      if file.startswith(post.id):
-                          downloaded_file = os.path.join("cache", file)
-                          break
-                  if downloaded_file:
-                      debug_log(f"  🟡 Downloaded video: {downloaded_file}")
-                      memes_metadata.append({
-                          "id": post.id,
-                          "title": post.title,
-                          "author": str(post.author) if post.author else "Unknown",
-                          "subreddit": str(post.subreddit),
-                          "upvotes": post.ups,
-                          "filename": os.path.basename(downloaded_file),
-                          "type": "video"
-                      })
-                      new_ids.append(post.id)
-                      total_memes += 1
-              except Exception as e:
-                  debug_log(f"  🔴 Error processing video post {post.id}: {e}")
-          if new_ids:
-              cached_ids.update(new_ids)
-              with open(cache_file, "w") as f:
-                  json.dump(sorted(cached_ids), f)
-              debug_log(f"🟢 Downloaded {len(new_ids)} new items.")
-          else:
-              debug_log("🟠 No New Items Found!")
-          
-          with open("cache/memes_metadata.json", "w") as f:
-              json.dump(memes_metadata, f, indent=2)
-          debug_log("🟢 Memes metadata collected.")
-          EOF
+          python scripts/reddit_downloader.py \
+            --client-id "${{ secrets.REDDIT_CLIENT_ID }}" \
+            --client-secret "${{ secrets.REDDIT_CLIENT_SECRET }}" \
+            --user-agent "${{ secrets.REDDIT_USER_AGENT }}" \
+            --post-limit "${{ inputs.post_limit || '5' }}" \
+            $([ "${{ inputs.show_debug }}" == "true" ] && echo "--debug") \
+            $([ "${{ inputs.disable_cache_check }}" == "true" ] && echo "--disable-cache")
       - name: 🗂️ Collect Metadata
         id: collect-metadata
         run: |
@@ -282,116 +153,9 @@ jobs:
           disable_base64: true
       - name: ⏬ Download Coomer Posts (Parallel)
         run: |
-          echo "🟢 Starting Coomer download process with parallel requests..."
-          mkdir -p cache
-          python - <<EOF
-          import os
-          import json
-          import requests
-          import concurrent.futures
-          from requests.adapters import HTTPAdapter
-          from requests.packages.urllib3.util.retry import Retry
-          disable_cache_check = False
-          show_debug = True
-          MAX_URLS = 750  # Maximum number of URLs to process
-          creators = ["darcyxnycole", "belledelphine", "sweetiefox_of", "soogsx", "morgpie", "w0llip", "summertimejames", "f1nn5ter", "jamelizzzz", "lilijunex", "lunluns"]  # Add more creators as needed
-          o_limit = 50  # Number of posts to fetch per creator
-          cache_file = "cache/coomer_ids.json"
-          TIMEOUT_SECONDS = 300  # 5 minutes
-          MAX_WORKERS = 8        # Adjust as needed
-          def debug_log(msg):
-              if show_debug:
-                  print(msg)
-          def download_file(download_url, out_fname, file_id):
-              try:
-                  r = session.get(download_url, timeout=TIMEOUT_SECONDS)
-                  r.raise_for_status()
-                  with open(out_fname, "wb") as out:
-                      out.write(r.content)
-                  return True
-              except Exception as e:
-                  debug_log(f"  🔴 Error downloading file {file_id}: {e}")
-                  return False
-          try:
-              with open(cache_file, "r") as f:
-                  cached_ids = set(json.load(f))
-              debug_log("🟢 Loaded cached Coomer IDs.")
-          except:
-              cached_ids = set()
-              debug_log("🔴 No cache found. Starting fresh.")
-          unique_tasks = {}
-          new_ids = []
-          session = requests.Session()
-          retry = Retry(total=3, backoff_factor=1, status_forcelist=[502, 503, 504])
-          adapter = HTTPAdapter(max_retries=retry)
-          session.mount('http://', adapter)
-          session.mount('https://', adapter)
-          for creator in creators:
-              coomer_url = f"https://coomer.su/api/v1/onlyfans/user/{creator}?o={o_limit}"
-              debug_log(f"🟢 Fetching data from {coomer_url}")
-              try:
-                  resp = session.get(coomer_url, timeout=TIMEOUT_SECONDS)
-                  resp.raise_for_status()
-                  items = resp.json()
-              except Exception as e:
-                  debug_log(f"🔴 Failed to fetch data for {creator}: {e}")
-                  continue
-              for item in items:
-                  file_id = str(item.get('id', ''))
-                  if file_id in cached_ids and not disable_cache_check:
-                      debug_log(f"  🔵 Skipping cached file: {file_id}")
-                      continue
-                  debug_log(f"  🟡 Found new post: {file_id}")
-                  paths = set()
-                  if 'file' in item and 'path' in item['file']:
-                      paths.add(item['file']['path'])
-                  for att in item.get('attachments', []):
-                      p = att.get('path')
-                      if p:
-                          paths.add(p)
-                  for p in paths:
-                      download_url = "https://coomer.su" + p
-                      # Create directories per creator
-                      creator_dir = os.path.join("cache", creator)
-                      os.makedirs(creator_dir, exist_ok=True)
-                      out_fname = os.path.join(creator_dir, f"{file_id}-{os.path.basename(p)}")
-                      # Deduplicate by url/out_fname across all creators
-                      unique_tasks[(download_url, out_fname)] = file_id
-          # After collecting all tasks, limit to MAX_URLS
-          if len(unique_tasks) > MAX_URLS:
-              debug_log(f"🟢 Limiting downloads to first {MAX_URLS} URLs")
-              unique_tasks = dict(list(unique_tasks.items())[:MAX_URLS])
-          
-          tasks = [(k[0], k[1], v) for k, v in unique_tasks.items()]
-          total_tasks = len(tasks)
-          debug_log(f"🟢 Starting parallel downloads for {total_tasks} unique files.")
-          completed = 0
-          successful_ids = set()  # Track only successfully downloaded IDs
-          
-          with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-              future_map = {
-                  executor.submit(download_file, url, fname, fid): (url, fname, fid)
-                  for (url, fname, fid) in tasks
-              }
-              for future in concurrent.futures.as_completed(future_map):
-                  url, fname, fid = future_map[future]
-                  success = future.result()
-                  completed += 1
-                  percent = int((completed / total_tasks) * 100)
-                  if success:
-                      successful_ids.add(fid)  # Only add successfully downloaded IDs
-                      debug_log(f"  🟡 ({percent}%) Downloaded {fid} -> {fname}")
-                  else:
-                      debug_log(f"  🔴 ({percent}%) Failed {fid}")
-          
-          if successful_ids:  # Update cache with only successful downloads
-              cached_ids.update(successful_ids)
-              with open(cache_file, "w") as f:
-                  json.dump(sorted(cached_ids), f)
-              debug_log(f"🟢 Downloaded and cached {len(successful_ids)} new Coomer files.")
-          else:
-              debug_log("🟠 No New Items Found!")
-          EOF
+          python scripts/coomer_downloader.py \
+            $([ "${{ inputs.show_debug }}" == "true" ] && echo "--debug") \
+            $([ "${{ inputs.disable_cache_check }}" == "true" ] && echo "--disable-cache")
       - name: 🌐 Upload Coomer Posts with Rclone
         run: |
           echo "🟢 Uploading coomer posts to Pixeldrain with Rclone..."
@@ -401,7 +165,7 @@ jobs:
         id: compute-hash-coomer
         run: |
           echo "🟢 Computing hash of coomer_ids.json..."
-          if [ -f cache/coomer_ids.json ]; then
+          if [ -f cache/coomer_ids.json ]; then 
             COOMER_HASH=$(sha256sum cache/coomer_ids.json | awk '{print $1}')
             echo "🟢 Computed hash: $COOMER_HASH"
           else
@@ -450,87 +214,11 @@ jobs:
           echo "🟢 Installing python-telegram-bot..."
           pip install python-telegram-bot
           echo "🟢 Python dependencies installed."
-      - name: 📤 Send Memes in One Script
+      - name: 📤 Send Memes to Telegram
         run: |
           echo "📤 Starting to send memes to Telegram..."
-          python - <<'EOF'
-          import os
-          import re
-          import json
-          import asyncio
-          from telegram import Bot
-          
-          BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-          CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
-          METADATA_FILE = 'cache/memes_metadata.json'
-          
-          def escape_markdown(text):
-          	"""Escapes Markdown-sensitive characters."""
-          	escape_chars = r"_*[]()~`>#+-=|{}.!"
-          	return re.sub(f'([{"".join(re.escape(c) for c in escape_chars)}])', r'\\\1', text)
-          
-          def build_caption(meme):
-          	if meme['type'] == 'image':
-          		return f"""🎉 **New Meme Alert!**
-          📜 *Title:* {escape_markdown(meme.get('title', 'No Title'))}
-          🖋️ *Author:* {escape_markdown(meme.get('author', 'Unknown'))}
-          👍 *Upvotes:* {meme.get('upvotes', '0')}
-          🏷️ *Subreddit:* r/{escape_markdown(meme.get('subreddit', '?'))}"""
-          	else:
-          		return f"""🎉 **New Video Meme Alert!**
-          📜 *Title:* {escape_markdown(meme.get('title', 'No Title'))}
-          🖋️ *Author:* {escape_markdown(meme.get('author', 'Unknown'))}
-          👍 *Upvotes:* {meme.get('upvotes', '0')}
-          🏷️ *Subreddit:* r/{escape_markdown(meme.get('subreddit', '?'))}"""
-          
-          async def send_meme_async(bot, meme):
-          	file_path = os.path.join('cache', meme['filename'])
-          	caption = build_caption(meme)
-          	if meme['type'] == 'image':
-          		with open(file_path, 'rb') as img:
-          			await bot.send_photo(
-          				chat_id=CHAT_ID,
-          				photo=img,
-          				caption=caption,
-          				parse_mode='Markdown'
-          			)
-          			print(f"🟢 Sent image Meme ID: {meme['id']}")
-          	elif meme['type'] == 'video':
-          		with open(file_path, 'rb') as vid:
-          			await bot.send_video(
-          				chat_id=CHAT_ID,
-          				video=vid,
-          				caption=caption,
-          				parse_mode='Markdown',
-          				supports_streaming=True
-          			)
-          			print(f"🟢 Sent video Meme ID: {meme['id']}")
-          
-          async def main():
-          	bot = Bot(token=BOT_TOKEN)
-          	if not os.path.exists(METADATA_FILE):
-          		print("🟠 No metadata file found. Nothing to send.")
-          		return
-          
-          	with open(METADATA_FILE, 'r') as f:
-          		memes = json.load(f)
-          	print(f"🟢 Loaded {len(memes)} memes from metadata.")
-          
-          	for meme in memes:
-          		try:
-          			await send_meme_async(bot, meme)
-          		except Exception as e:
-          			print(f"🔴 Failed to send Meme ID {meme['id']}: {e}")
-          
-          	print("🟢 All memes have been processed.")
-          
-          if __name__ == '__main__':
-          	try:
-          		asyncio.run(main())
-          	except Exception as e:
-          		print(f"🔴 Error sending memes in batch: {e}")
-          EOF
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_TO }}
+          python scripts/telegram_sender.py \
+            --token "${{ secrets.TELEGRAM_TOKEN }}" \
+            --chat-id "${{ secrets.TELEGRAM_TO }}" \
+            $([ "${{ inputs.show_debug }}" == "true" ] && echo "--debug")
         continue-on-error: true
