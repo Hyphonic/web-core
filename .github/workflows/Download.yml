@@ -318,7 +318,7 @@ jobs:
 
           disable_cache_check = False
           show_debug = True
-          creators = ["darcyxnycole", "belledelphine", "sweetiefox_of"]  # Add more creators as needed
+          creators = ["darcyxnycole", "belledelphine", "sweetiefox_of", "soogsx", "morgpie", "w0llip"]  # Add more creators as needed
           o_limit = 50  # Number of posts to fetch per creator
           cache_file = "cache/coomer_ids.json"
           TIMEOUT_SECONDS = 300  # 5 minutes
