@@ -1,6 +1,8 @@
 name: Download Posts
 
 on:
+  schedule:
+    - cron: '*/10 * * * *'
   workflow_dispatch:
     inputs:
       disable_cache_check:
