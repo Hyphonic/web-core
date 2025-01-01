@@ -277,9 +277,9 @@ def main():
                 successful_downloads += 1
                 successful_ids.add(fid)
                 percentage = round((completed / total_tasks) * 100)
-                debug_log(f"  🟡 ({completed}/{total_tasks}) [{percentage}] Downloaded {fid} -> {fname}", args.debug)
+                debug_log(f"  🟡 ({completed}/{total_tasks}) [{percentage}%] Downloaded {fid} -> {fname}", args.debug)
             else:
-                debug_log(f"  🔴 ({completed}/{total_tasks}) [{percentage}] Failed {fid}", args.debug)
+                debug_log(f"  🔴 ({completed}/{total_tasks}) [{percentage}%] Failed {fid}", args.debug)
 
     # Display final statistics
     display_download_results(unique_tasks, cached_ids, successful_downloads, successful_ids, args.debug)
