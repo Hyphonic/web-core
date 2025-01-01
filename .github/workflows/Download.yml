@@ -10,8 +10,8 @@ on:
         type: boolean
       show_debug:
         description: 'Enable debug messages (true/false)'
-        required: false
-        default: false
+        required: true
+        default: true
         type: boolean
       post_limit:
         description: 'Number of posts to fetch from each subreddit'
