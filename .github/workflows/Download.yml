@@ -18,6 +18,25 @@ on:
         required: false
         default: '5'
         type: string
+      target_posts:
+        description: 'Number of posts to fetch per creator'
+        required: false
+        default: '50'
+        type: string
+      max_urls:
+        description: 'Maximum total URLs to download'
+        required: false
+        default: '750'
+        type: string
+      creators:
+        description: 'Comma-separated list of creators (leave empty for default)'
+        required: false
+        type: string
+      delete_cache:
+        description: 'Delete existing cache before starting'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   download-memes:
@@ -155,7 +174,11 @@ jobs:
         run: |
           python scripts/coomer_downloader.py \
             $([ "${{ inputs.show_debug }}" == "true" ] && echo "--debug") \
-            $([ "${{ inputs.disable_cache_check }}" == "true" ] && echo "--disable-cache")
+            $([ "${{ inputs.disable_cache_check }}" == "true" ] && echo "--disable-cache") \
+            --target-posts "${{ inputs.target_posts || '50' }}" \
+            --max-urls "${{ inputs.max_urls || '750' }}" \
+            $([ ! -z "${{ inputs.creators }}" ] && echo "--creators '${{ inputs.creators }}'") \
+            $([ "${{ inputs.delete_cache }}" == "true" ] && echo "--delete-cache")
       - name: 🌐 Upload Coomer Posts with Rclone
         run: |
           echo "🟢 Uploading coomer posts to Pixeldrain with Rclone..."
