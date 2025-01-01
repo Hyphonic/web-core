@@ -8,7 +8,7 @@ from requests.packages.urllib3.util.retry import Retry
 
 # Constants and Configuration
 TIMEOUT_SECONDS = 300  # 5 minutes
-MAX_WORKERS = 6
+MAX_WORKERS = 8
 MAX_URLS = 150
 CREATORS = [
     "darcyxnycole", "belledelphine", "sweetiefox_of", "soogsx",
@@ -59,16 +59,14 @@ def collect_creator_posts(creator, session, cached_ids, target_posts=50, disable
                 debug_log(f"🔵 No more posts found for {creator}", show_debug)
                 break
                 
-            new_items_found = False
+            page_stats = {'new': 0, 'cached': 0, 'total': len(items)}
             for item in items:
                 file_id = str(item.get('id', ''))
                 if file_id in cached_ids and not disable_cache_check:
-                    debug_log(f"  🔵 Skipping cached file: {file_id}", show_debug)
+                    page_stats['cached'] += 1
                     continue
                     
-                new_items_found = True
-                debug_log(f"  🟡 Found new post: {file_id}", show_debug)
-                
+                page_stats['new'] += 1
                 paths = set()
                 if 'file' in item and 'path' in item['file']:
                     paths.add(item['file']['path'])
@@ -89,7 +87,10 @@ def collect_creator_posts(creator, session, cached_ids, target_posts=50, disable
                 if total_new_posts >= target_posts:
                     break
             
-            if not new_items_found:
+            # Show page summary instead of individual files
+            debug_log(f"  📄 Page {page}: Found {page_stats['new']} new posts, skipped {page_stats['cached']} cached posts", show_debug)
+            
+            if page_stats['new'] == 0:
                 debug_log(f"🔵 No new posts found on page {page} for {creator}", show_debug)
                 break
                 
