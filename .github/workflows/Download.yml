@@ -83,7 +83,7 @@ jobs:
       - name: 🌐 Upload Memes with Rclone
         run: |
           echo "🟢 Uploading memes to Pixeldrain with Rclone..."
-          rclone copy cache Pixeldrain:"💯 Memes"
+          rclone copy cache Pixeldrain:"💯 Memes" --disable-http2 --multi-thread-streams 6 --transfers 8 -v
           echo "🟢 Upload complete."
       - name: 🔧 Compute Hash of Updated meme_ids.json
         id: compute-hash
