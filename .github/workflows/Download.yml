@@ -67,7 +67,7 @@ jobs:
           python scripts/reddit_downloader.py \
             --client-id "${{ secrets.REDDIT_CLIENT_ID }}" \
             --client-secret "${{ secrets.REDDIT_CLIENT_SECRET }}" \
-            --user-agent "'${{ secrets.REDDIT_USER_AGENT }}'" \
+            --user-agent "Average Upvote v1.0 by /u/Hyphonical" \
             --post-limit "${{ inputs.post_limit || '5' }}" \
             $([ "${{ inputs.show_debug }}" == "true" ] && echo "--debug") \
             $([ "${{ inputs.disable_cache_check }}" == "true" ] && echo "--disable-cache")
