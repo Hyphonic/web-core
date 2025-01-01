@@ -301,6 +301,7 @@ jobs:
           from requests.packages.urllib3.util.retry import Retry
           disable_cache_check = False
           show_debug = True
+          MAX_URLS = 750  # Maximum number of URLs to process
           creators = ["darcyxnycole", "belledelphine", "sweetiefox_of", "soogsx", "morgpie", "w0llip", "summertimejames", "f1nn5ter", "jamelizzzz", "lilijunex", "lunluns"]  # Add more creators as needed
           o_limit = 50  # Number of posts to fetch per creator
           cache_file = "cache/coomer_ids.json"
@@ -364,6 +365,10 @@ jobs:
                       out_fname = os.path.join(creator_dir, f"{file_id}-{os.path.basename(p)}")
                       # Deduplicate by url/out_fname across all creators
                       unique_tasks[(download_url, out_fname)] = file_id
+          # After collecting all tasks, limit to MAX_URLS
+          if len(unique_tasks) > MAX_URLS:
+              debug_log(f"🟢 Limiting downloads to first {MAX_URLS} URLs")
+              unique_tasks = dict(list(unique_tasks.items())[:MAX_URLS])
           tasks = [(k[0], k[1], v) for k, v in unique_tasks.items()]
           total_tasks = len(tasks)
           debug_log(f"🟢 Starting parallel downloads for {total_tasks} unique files.")
