@@ -51,25 +51,21 @@ jobs:
           key: meme-ids-cache-
           restore-keys: |
             meme-ids-cache-
-
       - name: 🧰 Install Dependencies
         run: |
           echo "🟢 Upgrading pip..."
           python -m pip install --upgrade pip
           echo "🟢 Installing PRAW, Requests, and yt_dlp..."
           pip install praw requests yt-dlp
-
       - name: 🔧 Install Rclone
         run: |
           echo "🟢 Installing Rclone..."
           curl https://rclone.org/install.sh | sudo bash
-
       - name: 📂 Set Up Rclone Config
         run: |
           echo "🟢 Setting up Rclone configuration..."
           mkdir -p ~/.config/rclone
           echo "${{ secrets.PIXELDRAIN_CONF }}" > ~/.config/rclone/rclone.conf
-
       - name: ⏬ Download Reddit Posts
         id: download-memes
         env:
@@ -91,7 +87,6 @@ jobs:
           import sys
           from requests.adapters import HTTPAdapter
           from requests.packages.urllib3.util.retry import Retry
-          import shutil
           
           client_id = os.getenv("CLIENT_ID")
           client_secret = os.getenv("CLIENT_SECRET")
@@ -199,7 +194,6 @@ jobs:
                       total_memes += 1
               except Exception as e:
                   debug_log(f"  🔴 Error processing video post {post.id}: {e}")
-
           if new_ids:
               cached_ids.update(new_ids)
               with open(cache_file, "w") as f:
@@ -212,7 +206,6 @@ jobs:
               json.dump(memes_metadata, f, indent=2)
           debug_log("🟢 Memes metadata collected.")
           EOF
-
       - name: 🗂️ Collect Metadata
         id: collect-metadata
         run: |
@@ -222,13 +215,11 @@ jobs:
           metadata=$(echo "$limited_metadata" | jq -c .)
           echo "metadata=$metadata" >> $GITHUB_OUTPUT
           echo "🟢 Metadata collection complete."
-
       - name: 🌐 Upload Memes with Rclone
         run: |
           echo "🟢 Uploading memes to Pixeldrain with Rclone..."
           rclone copy cache Pixeldrain:"💯 Memes"
           echo "🟢 Upload complete."
-
       - name: 🔧 Compute Hash of Updated meme_ids.json
         id: compute-hash
         run: |
@@ -241,7 +232,6 @@ jobs:
             echo "🔴 meme_ids.json not found. Using default hash."
           fi
           echo "hash=$FILE_HASH" >> $GITHUB_ENV
-
       - name: 💾 Update Meme IDs Cache
         uses: actions/cache@v4
         with:
@@ -253,7 +243,6 @@ jobs:
           echo "🟢 Listing all files in cache..."
           tree
           echo "🟢 File listing complete."
-
       - name: 📤 Upload Cache as Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -287,24 +276,20 @@ jobs:
           key: coomer-ids-cache-
           restore-keys: |
             coomer-ids-cache-
-
       - name: 🧰 Install Dependencies
         run: |
           echo "🟢 Installing dependencies..."
           python -m pip install --upgrade pip
           pip install requests
-
       - name: 🔧 Install Rclone
         run: |
           echo "🟢 Installing Rclone..."
           curl https://rclone.org/install.sh | sudo bash
-
       - name: 📂 Set Up Rclone Config
         run: |
           echo "🟢 Setting up Rclone configuration..."
           mkdir -p ~/.config/rclone
           echo "${{ secrets.PIXELDRAIN_CONF }}" > ~/.config/rclone/rclone.conf
-
       - name: ⏬ Download Coomer Posts (Parallel)
         run: |
           echo "🟢 Starting Coomer download process with parallel requests..."
@@ -314,33 +299,38 @@ jobs:
           import json
           import requests
           import concurrent.futures
-          import shutil
+          import shutil  # Imported for disk space checks
           from requests.adapters import HTTPAdapter
           from requests.packages.urllib3.util.retry import Retry
 
           disable_cache_check = False
           show_debug = True
-          creators = ["darcyxnycole","belledelphine","sweetiefox_of","soogsx","morgpie","w0llip","summertimejames","f1nn5ter","jamelizzzz","lilijunex","lunluns"]
-          o_limit = 50
-          MAX_NEW_POSTS_PER_RUN = 50  # Download up to 50 new posts each run
+          creators = [
+              "darcyxnycole", "belledelphine", "sweetiefox_of", "soogsx",
+              "morgpie", "w0llip", "summertimejames", "f1nn5ter",
+              "jamelizzzz", "lilijunex", "lunluns"
+          ]  # Add more creators as needed
+          o_limit = 50  # Number of posts to fetch per creator
           cache_file = "cache/coomer_ids.json"
-          TIMEOUT_SECONDS = 300
-          MAX_WORKERS = 8
+          TIMEOUT_SECONDS = 300  # 5 minutes
+          MAX_WORKERS = 8        # Adjust as needed
 
           def debug_log(msg):
               if show_debug:
                   print(msg)
 
-          def check_free_space(required_bytes=1_073_741_824):
+          def check_free_space(required_bytes=1_000_000):
+              """Check if there is at least the required number of bytes free."""
               total, used, free = shutil.disk_usage(os.getcwd())
               if free < required_bytes:
-                  debug_log(f"🔴 Insufficient disk space. Required: {required_bytes}, Available: {free}.")
+                  debug_log(f"🔴 Insufficient disk space. Required: {required_bytes} bytes, Available: {free} bytes.")
                   return False
               return True
 
           def download_file(download_url, out_fname, file_id):
-              # Stop if out of storage
+              # Check disk space before downloading each file
               if not check_free_space():
+                  debug_log(f"🔴 Not enough free space to download {file_id}. Skipping.")
                   return False
               try:
                   r = session.get(download_url, timeout=TIMEOUT_SECONDS)
@@ -352,7 +342,7 @@ jobs:
                   debug_log(f"  🔴 Error downloading file {file_id}: {e}")
                   return False
 
-          # Check storage before starting
+          # Initial disk space check before starting downloads
           if not check_free_space():
               debug_log("🔴 Exiting due to insufficient disk space.")
               exit(1)
@@ -361,7 +351,7 @@ jobs:
           try:
               with open(cache_file, "r") as f:
                   cached_ids = set(json.load(f))
-              debug_log(f"🟢 Loaded {len(cached_ids)} cached Coomer IDs.")
+              debug_log(f"🟢 ({len(cached_ids)}) Loaded cached Coomer IDs.")
           except:
               cached_ids = set()
               debug_log("🔴 No cache found. Starting fresh.")
@@ -369,66 +359,58 @@ jobs:
           unique_tasks = {}
           new_ids = []
 
+          # Set up the requests session with retries
           session = requests.Session()
           retry = Retry(total=3, backoff_factor=1, status_forcelist=[502, 503, 504])
           adapter = HTTPAdapter(max_retries=retry)
           session.mount('http://', adapter)
           session.mount('https://', adapter)
 
-          # Gather 50 new posts per creator
           for creator in creators:
-              page = 0
-              new_posts = 0
-              while new_posts < MAX_NEW_POSTS_PER_RUN:
-                  offset = page * o_limit
-                  coomer_url = f"https://coomer.su/api/v1/onlyfans/user/{creator}?o={offset}"
-                  debug_log(f"🟢 Fetching data from {coomer_url} with page {page}...")
-                  try:
-                      resp = session.get(coomer_url, timeout=TIMEOUT_SECONDS)
-                      resp.raise_for_status()
-                      items = resp.json()
-                      if not items: 
-                          break
-                  except Exception as e:
-                      debug_log(f"🔴 Failed to fetch data for {creator} page {page}: {e}")
-                      break
+              coomer_url = f"https://coomer.su/api/v1/onlyfans/user/{creator}?o={o_limit}"
+              debug_log(f"🟢 Fetching data from {coomer_url}")
+              try:
+                  resp = session.get(coomer_url, timeout=TIMEOUT_SECONDS)
+                  resp.raise_for_status()
+                  items = resp.json()
+              except Exception as e:
+                  debug_log(f"🔴 Failed to fetch data for {creator}: {e}")
+                  continue
 
-                  for item in items:
-                      file_id = str(item.get('id', ''))
-                      if file_id in cached_ids and not disable_cache_check:
-                          debug_log(f"  🔵 Skipping cached file: {file_id}")
-                          continue
+              for item in items:
+                  file_id = str(item.get('id', ''))
+                  if file_id in cached_ids and not disable_cache_check:
+                      debug_log(f"  🔵 Skipping cached file: {file_id}")
+                      continue
 
-                      # Gather all media paths
-                      paths = set()
-                      if 'file' in item and 'path' in item['file']:
-                          paths.add(item['file']['path'])
-                      for att in item.get('attachments', []):
-                          p = att.get('path')
-                          if p: 
-                              paths.add(p)
+                  paths = set()
+                  if 'file' in item and 'path' in item['file']:
+                      paths.add(item['file']['path'])
+                  for att in item.get('attachments', []):
+                      p = att.get('path')
+                      if p:
+                          paths.add(p)
 
-                      for p in paths:
-                          download_url = "https://coomer.su" + p
-                          creator_dir = os.path.join("cache", creator)
-                          os.makedirs(creator_dir, exist_ok=True)
-                          out_fname = os.path.join(creator_dir, f"{file_id}-{os.path.basename(p)}")
+                  for p in paths:
+                      download_url = "https://coomer.su" + p
+                      creator_dir = os.path.join("cache", creator)
+                      os.makedirs(creator_dir, exist_ok=True)
+                      out_fname = os.path.join(creator_dir, f"{file_id}-{os.path.basename(p)}")
 
-                          # Keep track of unique downloads
-                          if (download_url, out_fname) not in unique_tasks:
-                              unique_tasks[(download_url, out_fname)] = file_id
-                              new_posts += 1
-                              if new_posts >= MAX_NEW_POSTS_PER_RUN:
-                                  break
-                  if len(items) < o_limit:
-                      break
-                  page += 1
+                      # Deduplicate by url/out_fname across all creators
+                      if (download_url, out_fname) not in unique_tasks:
+                          unique_tasks[(download_url, out_fname)] = file_id
+
+              # Check disk space after processing each creator
+              if not check_free_space():
+                  debug_log("🔴 Insufficient disk space, stopping Coomer downloads.")
+                  break
 
           tasks = [(k[0], k[1], v) for k, v in unique_tasks.items()]
           total_tasks = len(tasks)
           debug_log(f"🟢 Starting parallel downloads for {total_tasks} unique files.")
-
           completed = 0
+
           with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
               future_map = {
                   executor.submit(download_file, url, fname, fid): (url, fname, fid)
@@ -439,17 +421,11 @@ jobs:
                   success = future.result()
                   completed += 1
                   percent = int((completed / total_tasks) * 100)
-
-                  # Calculate used storage percentage
-                  total_disk, used_disk, free_disk = shutil.disk_usage(os.getcwd())
-                  storage_used_percent = int((used_disk / total_disk) * 100)
-
                   if success:
                       new_ids.append(fid)
-                      debug_log(f"  🟡 ({percent}%) Downloaded {fid} -> {fname}, Storage: {storage_used_percent}% used")
+                      debug_log(f"  🟡 ({percent}%) Downloaded {fid} -> {fname}")
                   else:
-                      debug_log(f"  🔴 ({percent}%) Failed {fid}, Storage: {storage_used_percent}% used")
-
+                      debug_log(f"  🔴 ({percent}%) Failed {fid}")
           if new_ids:
               cached_ids.update(new_ids)
               with open(cache_file, "w") as f:
@@ -458,13 +434,11 @@ jobs:
           else:
               debug_log("🟠 No New Items Found!")
           EOF
-
       - name: 🌐 Upload Coomer Posts with Rclone
         run: |
           echo "🟢 Uploading coomer posts to Pixeldrain with Rclone..."
           rclone copy cache Pixeldrain:"🌀 Onlyfans"
           echo "🟢 Upload complete."
-
       - name: 🔧 Compute Hash of Updated coomer_ids.json
         id: compute-hash-coomer
         run: |
@@ -477,7 +451,6 @@ jobs:
             echo "🔴 coomer_ids.json not found. Using default hash."
           fi
           echo "coomer_hash=$COOMER_HASH" >> $GITHUB_ENV
-
       - name: 💾 Update Coomer IDs Cache
         uses: actions/cache@v4
         with:
@@ -489,7 +462,6 @@ jobs:
           echo "🟢 Listing Coomer files in cache..."
           tree cache
           echo "🟢 File listing complete."
-
       - name: 📤 Upload Cache as Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -520,7 +492,6 @@ jobs:
           echo "🟢 Installing python-telegram-bot..."
           pip install python-telegram-bot
           echo "🟢 Python dependencies installed."
-
       - name: 📤 Send Memes in One Script
         run: |
           echo "📤 Starting to send memes to Telegram..."
