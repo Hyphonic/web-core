@@ -8,8 +8,8 @@ from requests.packages.urllib3.util.retry import Retry
 
 # Constants and Configuration
 TIMEOUT_SECONDS = 300  # 5 minutes
-MAX_WORKERS = 8
-MAX_URLS = 750
+MAX_WORKERS = 6
+MAX_URLS = 150
 CREATORS = [
     "darcyxnycole", "belledelphine", "sweetiefox_of", "soogsx",
     "morgpie", "w0llip", "summertimejames", "f1nn5ter",
@@ -275,7 +275,7 @@ def main():
             if success:
                 successful_downloads += 1
                 successful_ids.add(fid)
-                percentage = (completed / total_tasks) * 100
+                percentage = round((completed / total_tasks) * 100)
                 debug_log(f"  🟡 ({completed}/{total_tasks}) [{percentage}] Downloaded {fid} -> {fname}", args.debug)
             else:
                 debug_log(f"  🔴 ({completed}/{total_tasks}) [{percentage}] Failed {fid}", args.debug)
