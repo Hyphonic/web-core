@@ -9,7 +9,7 @@ from requests.packages.urllib3.util.retry import Retry
 # Constants and Configuration
 TIMEOUT_SECONDS = 300  # 5 minutes
 MAX_WORKERS = 8
-MAX_URLS = 750
+MAX_URLS = 400
 CREATORS = [
     "darcyxnycole", "belledelphine", "sweetiefox_of", "soogsx",
     "morgpie", "w0llip", "summertimejames", "f1nn5ter",
