@@ -115,6 +115,81 @@ def check_disk_space(path="."):
     total, used, free = shutil.disk_usage(path)
     return free > MIN_DISK_SPACE, free / (5 * 1024 * 1024)  # Return bool and GB free
 
+def display_download_preview(unique_tasks, cached_ids, show_debug=True):
+    """Display preview of upcoming downloads."""
+    if not show_debug:
+        return
+
+    print("\n📊 Download Preview:")
+    print("=" * 50)
+    
+    # Group by creator and count files
+    creator_stats = {}
+    creator_posts = {}
+    for (url, fname), file_id in unique_tasks.items():
+        creator = os.path.basename(os.path.dirname(fname))
+        creator_stats[creator] = creator_stats.get(creator, 0) + 1
+        if creator not in creator_posts:
+            creator_posts[creator] = set()
+        creator_posts[creator].add(file_id)
+
+    print("\n👤 Per Creator Breakdown:")
+    print("-" * 50)
+    for creator in creator_stats:
+        files = creator_stats[creator]
+        posts = len(creator_posts[creator])
+        ratio = files / posts if posts > 0 else 0
+        print(f"  • {creator}:")
+        print(f"    - Files to download: {files}")
+        print(f"    - Unique posts: {posts}")
+        print(f"    - Files per post: {ratio:.1f}")
+    
+    print("\n📈 Preview Totals:")
+    print("-" * 50)
+    total_files = sum(creator_stats.values())
+    total_posts = sum(len(posts) for posts in creator_posts.values())
+    print(f"  • Total files to download: {total_files}")
+    print(f"  • Total unique posts: {total_posts}")
+    print(f"  • Current cache size: {len(cached_ids)}")
+    print("=" * 50 + "\n")
+
+def display_download_results(unique_tasks, cached_ids, successful_downloads, successful_ids, show_debug=True):
+    """Display final download results."""
+    if not show_debug:
+        return
+
+    print("\n📊 Download Results:")
+    print("=" * 50)
+    
+    # Group results by creator
+    creator_stats = {}
+    for (url, fname), file_id in unique_tasks.items():
+        creator = os.path.basename(os.path.dirname(fname))
+        if creator not in creator_stats:
+            creator_stats[creator] = {'total': 0, 'success': 0, 'posts': set()}
+        creator_stats[creator]['total'] += 1
+        if file_id in successful_ids:
+            creator_stats[creator]['success'] += 1
+            creator_stats[creator]['posts'].add(file_id)
+
+    print("\n👤 Per Creator Results:")
+    print("-" * 50)
+    for creator, stats in creator_stats.items():
+        success_rate = (stats['success'] / stats['total'] * 100) if stats['total'] > 0 else 0
+        print(f"  • {creator}:")
+        print(f"    - Successfully downloaded: {stats['success']}/{stats['total']} files ({success_rate:.1f}%)")
+        print(f"    - Unique posts added: {len(stats['posts'])}")
+        if stats['posts']:
+            ratio = stats['success'] / len(stats['posts'])
+            print(f"    - Files per post: {ratio:.1f}")
+
+    print("\n📈 Final Totals:")
+    print("-" * 50)
+    print(f"  • Total files downloaded: {successful_downloads}")
+    print(f"  • New posts added to cache: {len(successful_ids)}")
+    print(f"  • Total cache size: {len(cached_ids)}")
+    print("=" * 50 + "\n")
+
 def main():
     args = parse_args()
     cache_file = "cache/coomer_ids.json"
