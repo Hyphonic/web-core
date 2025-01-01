@@ -2,7 +2,7 @@ name: Download Posts
 
 on:
   schedule:
-    - cron: '*/20 * * * *'
+    - cron: '*/15 * * * *'
   workflow_dispatch:
     inputs:
       disable_cache_check:
