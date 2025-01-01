@@ -325,6 +325,7 @@ jobs:
           cache_file = "cache/coomer_ids.json"
           TIMEOUT_SECONDS = 300  # 5 minutes
           MAX_WORKERS = 8        # Adjust as needed
+          MAX_POSTS_PER_CREATOR = 10  # Maximum number of posts to download per creator
 
           def debug_log(msg):
               if show_debug:
@@ -351,11 +352,6 @@ jobs:
                   debug_log(f"🔴 Insufficient disk space. Required: {required_bytes} bytes, Available: {free} bytes.")
                   return False
               return True
-
-          # Check for sufficient disk space before proceeding
-          if not check_free_space():
-              debug_log("🔴 Exiting due to insufficient disk space.")
-              exit(1)
 
           try:
               with open(cache_file, "r") as f:
@@ -414,9 +410,9 @@ jobs:
                           # Deduplicate by url/out_fname across all creators
                           unique_tasks[(download_url, out_fname)] = file_id
                           new_posts += 1
-                          if new_posts >= 50:
+                          if new_posts >= MAX_POSTS_PER_CREATOR:
                               break
-                  if new_posts >= 50 or len(items) < o_limit:
+                  if new_posts >= MAX_POSTS_PER_CREATOR or len(items) < o_limit:
                       break
                   page += 1
 
