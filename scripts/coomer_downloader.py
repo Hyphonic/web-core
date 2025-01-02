@@ -198,10 +198,22 @@ def display_download_results(unique_tasks, cached_ids, successful_downloads, suc
 def main():
     args = parse_args()
     
-    # Convert comma-separated creators to lists by platform
-    of_creators = [c.strip() for c in args.of_creators.split(',')] if args.of_creators else []
-    fansly_creators = [c.strip() for c in args.fansly_creators.split(',')] if args.fansly_creators else []
+    # Debug creator lists
+    of_creators = []
+    fansly_creators = []
     
+    if args.of_creators:
+        of_creators = [c.strip() for c in args.of_creators.split(',') if c.strip()]
+        debug_log(f"🔵 Found {len(of_creators)} OnlyFans creators: {[anonymize_name(c) for c in of_creators]}", args.debug)
+    
+    if args.fansly_creators:
+        fansly_creators = [c.strip() for c in args.fansly_creators.split(',') if c.strip()]
+        debug_log(f"🔵 Found {len(fansly_creators)} Fansly creators: {[anonymize_name(c) for c in fansly_creators]}", args.debug)
+    
+    if not of_creators and not fansly_creators:
+        debug_log("🔴 No creators specified for any platform!", args.debug)
+        return
+
     cache_file = "cache/coomer_ids.json"
     os.makedirs("cache", exist_ok=True)
 
@@ -233,7 +245,15 @@ def main():
 
     # Collect posts from all creators across platforms
     for platform, creators in [('onlyfans', of_creators), ('fansly', fansly_creators)]:
+        if not creators:
+            debug_log(f"🔵 Skipping {platform} - no creators specified", args.debug)
+            continue
+            
         for creator in creators:
+            if not creator.isdigit():
+                debug_log(f"🔴 Invalid creator ID for {platform}: {anonymize_name(creator)}", args.debug)
+                continue
+                
             debug_log(f"🟢 Processing {platform} creator: {anonymize_name(creator)}", args.debug)
             creator_posts = collect_creator_posts(
                 creator, platform, session, cached_ids,
