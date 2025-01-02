@@ -205,13 +205,17 @@ jobs:
           rclone_config: ${{ secrets.PIXELDRAIN_CONF }}
           disable_base64: true
       - name: ⏬ Download Coomer Posts (Parallel)
+        env:
+          OF_CREATORS: ${{ secrets.CREATORS_LIST_OF }}
+          FANSLY_CREATORS: ${{ secrets.CREATORS_LIST_FANSLY }}
         run: |
           python scripts/coomer_downloader.py \
             $([ "${{ inputs.show_debug }}" == "true" ] && echo "--debug") \
             $([ "${{ inputs.disable_cache_check }}" == "true" ] && echo "--disable-cache") \
             --target-posts "${{ inputs.target_posts_coomer || '300' }}" \
             --max-urls "${{ inputs.max_urls_coomer || '250' }}" \
-            $([ ! -z "${{ inputs.creators }}" ] && echo "--creators '${{ inputs.creators }}'")
+            --of-creators "$OF_CREATORS" \
+            --fansly-creators "$FANSLY_CREATORS"
       - name: 🌐 Upload Coomer Posts with Rclone
         run: |
           echo "🟢 Uploading coomer posts to Pixeldrain with Rclone..."
@@ -240,7 +244,6 @@ jobs:
           echo "🟢 Listing Coomer files in cache..."
           tree cache
           echo "🟢 File listing complete."
-
   download-kemono:
     needs: check-workflows
     if: needs.check-workflows.outputs.should_run == 'true'
@@ -315,7 +318,6 @@ jobs:
           echo "🟢 Listing Kemono files in cache..."
           tree cache
           echo "🟢 File listing complete."
-
   send-to-telegram:
     needs: download-memes
     name: 📤 Send All Memes to Telegram
