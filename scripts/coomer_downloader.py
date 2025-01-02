@@ -6,32 +6,16 @@ import concurrent.futures
 import argparse
 from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util.retry import Retry
-import threading
-import time
-import sys
 
 # Constants and Configuration
 TIMEOUT_SECONDS = 300  # 5 minutes
 MAX_WORKERS = 8
 MAX_URLS = 250
+MIN_DISK_SPACE = 2 * 1024 * 1024 * 1024  # 2GB in bytes
 PLATFORMS = {
     'onlyfans': 'https://coomer.su/api/v1/onlyfans/user',
     'fansly': 'https://coomer.su/api/v1/fansly/user'
 }
-
-# Remove the existing check_disk_space references
-
-LOW_SPACE_EVENT = threading.Event()
-
-def watch_storage_space(path=".", gb_limit=2):
-    """Background thread to monitor disk space and signal when it's <= gb_limit."""
-    while not LOW_SPACE_EVENT.is_set():
-        total, used, free = shutil.disk_usage(path)
-        free_gb = free / (1024 * 1024 * 1024)
-        if free_gb <= gb_limit:
-            LOW_SPACE_EVENT.set()
-            break
-        time.sleep(5)  # check every 5 seconds
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Coomer.party Downloader')
@@ -44,6 +28,7 @@ def parse_args():
     return parser.parse_args()
 
 def anonymize_name(name):
+    """Convert creator names to anonymous format (first 2 chars + ****)"""
     return f"{name[:2]}****" if len(name) > 2 else name
 
 def debug_log(msg, show_debug=True):
@@ -73,26 +58,26 @@ def collect_creator_posts(creator, platform, session, cached_ids, target_posts=5
     while total_new_posts < target_posts:
         coomer_url = f"{PLATFORMS[platform]}/{creator}?o={offset}"
         debug_log(f"🟢 Fetching {platform} page {page} ({offset}) from {coomer_url}", show_debug)
-        
+
         try:
             resp = session.get(coomer_url, timeout=TIMEOUT_SECONDS)
             resp.raise_for_status()
             items = resp.json()
-            
+
             if not items:  # Truly no more posts available
                 debug_log(f"🔵 Reached end of available posts for {creator} after {total_pages_checked} pages", show_debug)
                 break
-                
+
             total_pages_checked += 1
             total_checked_posts += len(items)
             page_stats = {'new': 0, 'cached': 0, 'total': len(items)}
-            
+
             for item in items:
                 file_id = str(item.get('id', ''))
                 if file_id in cached_ids and not disable_cache_check:
                     page_stats['cached'] += 1
                     continue
-                    
+
                 page_stats['new'] += 1
                 paths = set()
                 if 'file' in item and 'path' in item['file']:
@@ -101,46 +86,52 @@ def collect_creator_posts(creator, platform, session, cached_ids, target_posts=5
                     p = att.get('path')
                     if p:
                         paths.add(p)
-                
-                if paths:
+
+                if paths:  # Only count posts with media
                     collected_posts[file_id] = []
                     for p in paths:
                         download_url = "https://coomer.su" + p
-                        creator_dir = os.path.join("cache", creator)
+                        creator_dir = os.path.join("cache", creator)  # Simplified path
                         out_fname = os.path.join(creator_dir, f"{file_id}-{os.path.basename(p)}")
                         collected_posts[file_id].append((download_url, out_fname))
                         total_new_posts += 1
-                        
+
                 if total_new_posts >= target_posts:
                     break
-            
+
             debug_log(f"  📄 Page {page}: Found {page_stats['new']} new posts, skipped {page_stats['cached']} cached posts", show_debug)
-                
+
             page += 1
             offset += 50
-            
+
         except Exception as e:
             debug_log(f"🔴 Failed to fetch page {page} for {creator}: {e}", show_debug)
             break
-    
+
     debug_log(f"📊 Creator {creator} summary:", show_debug)
     debug_log(f"  • Pages checked: {total_pages_checked}", show_debug)
     debug_log(f"  • Posts checked: {total_checked_posts}", show_debug)
     debug_log(f"  • New posts found: {len(collected_posts)}", show_debug)
-    
+
     return collected_posts
 
+def check_disk_space(path="."):
+    """Check if enough disk space is available."""
+    total, used, free = shutil.disk_usage(path)
+    return free > MIN_DISK_SPACE, free / (5 * 1024 * 1024)  # Return bool and GB free
 def display_download_preview(unique_tasks, cached_ids, show_debug=True):
+    """Display preview of upcoming downloads."""
     if not show_debug:
         return
 
     print("\n📊 Download Preview:")
     print("=" * 50)
-    
+
+    # Group by creator and count files
     creator_stats = {}
     creator_posts = {}
     for (url, fname), file_id in unique_tasks.items():
-        creator = os.path.basename(os.path.dirname(fname))
+        creator = os.path.basename(os.path.dirname(fname))  # Path already simplified
         creator_stats[creator] = creator_stats.get(creator, 0) + 1
         if creator not in creator_posts:
             creator_posts[creator] = set()
@@ -156,7 +147,7 @@ def display_download_preview(unique_tasks, cached_ids, show_debug=True):
         print(f"    - Files to download: {files}")
         print(f"    - Unique posts: {posts}")
         print(f"    - Files per post: {ratio:.1f}")
-    
+
     print("\n📈 Preview Totals:")
     print("-" * 50)
     total_files = sum(creator_stats.values())
@@ -167,15 +158,17 @@ def display_download_preview(unique_tasks, cached_ids, show_debug=True):
     print("=" * 50 + "\n")
 
 def display_download_results(unique_tasks, cached_ids, successful_downloads, successful_ids, show_debug=True):
+    """Display final download results."""
     if not show_debug:
         return
 
     print("\n📊 Download Results:")
     print("=" * 50)
-    
+
+    # Group results by creator
     creator_stats = {}
     for (url, fname), file_id in unique_tasks.items():
-        creator = os.path.basename(os.path.dirname(fname))
+        creator = os.path.basename(os.path.dirname(fname))  # Path already simplified
         if creator not in creator_stats:
             creator_stats[creator] = {'total': 0, 'success': 0, 'posts': set()}
         creator_stats[creator]['total'] += 1
@@ -204,19 +197,18 @@ def display_download_results(unique_tasks, cached_ids, successful_downloads, suc
 def main():
     args = parse_args()
 
-    # Start background disk-space monitor
-    monitor_thread = threading.Thread(target=watch_storage_space, args=("cache", 2))
-    monitor_thread.daemon = True
-    monitor_thread.start()
-    
-    # Collect comma-separated creators for each platform
+    # Convert comma-separated creators to lists by platform
     of_creators = [c.strip() for c in args.of_creators.split(',')] if args.of_creators else []
     fansly_creators = [c.strip() for c in args.fansly_creators.split(',')] if args.fansly_creators else []
-    
+
     cache_file = "cache/coomer_ids.json"
     os.makedirs("cache", exist_ok=True)
 
-    # Remove any old disk space checks
+    # Check disk space before starting
+    has_space, gb_free = check_disk_space("cache")
+    if not has_space:
+        debug_log(f"🔴 Not enough disk space! Only {gb_free:.1f}GB free. Need at least 5GB.", args.debug)
+        return
 
     # Load cache
     try:
@@ -239,43 +231,49 @@ def main():
     successful_downloads = 0
 
     # Collect posts from all creators across platforms
-    for platform, creators_list in [('onlyfans', of_creators), ('fansly', fansly_creators)]:
-        for creator in creators_list:
+    for platform, creators in [('onlyfans', of_creators), ('fansly', fansly_creators)]:
+        for creator in creators:
             debug_log(f"🟢 Processing {platform} creator: {anonymize_name(creator)}", args.debug)
             creator_posts = collect_creator_posts(
                 creator, platform, session, cached_ids,
                 args.target_posts, args.disable_cache, args.debug
             )
-            
+
             # Add tasks from this creator
             for file_id, urls_and_fnames in creator_posts.items():
-                if len(unique_tasks) >= args.max_urls:
-                    debug_log(f"🟢 Reached maximum URL limit of {args.max_urls}", args.debug)
-                    break
                 for download_url, out_fname in urls_and_fnames:
                     if len(unique_tasks) >= args.max_urls:
                         break
                     unique_tasks[(download_url, out_fname)] = file_id
-
+            
             if len(unique_tasks) >= args.max_urls:
+                debug_log(f"🟢 Reached maximum URL limit of {args.max_urls}", args.debug)
                 break
 
+    # Convert tasks for parallel download
     tasks = [(k[0], k[1], v) for k, v in unique_tasks.items()]
     total_tasks = len(tasks)
     debug_log(f"🟢 Starting parallel downloads for {total_tasks} unique files.", args.debug)
     completed = 0
 
+    # Display download preview
     display_download_preview(unique_tasks, cached_ids, args.debug)
 
+    # Download files in parallel
     with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         future_map = {
-            executor.submit(download_file, session, url, fname, fid, args.debug): (url, fname, fid)
+            executor.submit(
+                download_file, session, url, fname, fid, args.debug
+            ): (url, fname, fid)
             for (url, fname, fid) in tasks
         }
         for future in concurrent.futures.as_completed(future_map):
-            if LOW_SPACE_EVENT.is_set():
-                debug_log("🔴 Low disk space, stopping downloads gracefully.", args.debug)
-                break
+            # Check disk space every 10 downloads
+            if completed % 10 == 0:
+                has_space, gb_free = check_disk_space("cache")
+                if not has_space:
+                    debug_log(f"🔴 Stopping downloads - Only {gb_free:.1f}GB free space left!", args.debug)
+                    break
 
             url, fname, fid = future_map[future]
             success = future.result()
@@ -290,17 +288,6 @@ def main():
                     debug_log(f"  🟡 ({completed}/{total_tasks}) Downloaded {fid} -> {fname}", args.debug)
             else:
                 debug_log(f"  🔴 ({completed}/{total_tasks})  Failed {fid}", args.debug)
-
-    # If we ran out of disk space, gracefully return success code (0)
-    if LOW_SPACE_EVENT.is_set():
-        debug_log("🔴 Exiting with code 0 due to low disk space (partial downloads).", args.debug)
-        # still save whatever we have so far
-        if successful_ids:
-            cached_ids.update(successful_ids)
-            with open(cache_file, "w") as f:
-                json.dump(sorted(cached_ids), f)
-            debug_log(f"🟢 Added {len(successful_ids)} new posts ({successful_downloads} files) to cache.", args.debug)
-        sys.exit(0)
 
     # Display final statistics
     display_download_results(unique_tasks, cached_ids, successful_downloads, successful_ids, args.debug)
