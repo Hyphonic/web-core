@@ -58,26 +58,26 @@ def collect_creator_posts(creator, platform, session, cached_ids, target_posts=5
     while total_new_posts < target_posts:
         coomer_url = f"{PLATFORMS[platform]}/{creator}?o={offset}"
         debug_log(f"🟢 Fetching {platform} page {page} ({offset}) from {coomer_url}", show_debug)
-
+        
         try:
             resp = session.get(coomer_url, timeout=TIMEOUT_SECONDS)
             resp.raise_for_status()
             items = resp.json()
-
+            
             if not items:  # Truly no more posts available
                 debug_log(f"🔵 Reached end of available posts for {creator} after {total_pages_checked} pages", show_debug)
                 break
-
+                
             total_pages_checked += 1
             total_checked_posts += len(items)
             page_stats = {'new': 0, 'cached': 0, 'total': len(items)}
-
+            
             for item in items:
                 file_id = str(item.get('id', ''))
                 if file_id in cached_ids and not disable_cache_check:
                     page_stats['cached'] += 1
                     continue
-
+                    
                 page_stats['new'] += 1
                 paths = set()
                 if 'file' in item and 'path' in item['file']:
@@ -86,7 +86,7 @@ def collect_creator_posts(creator, platform, session, cached_ids, target_posts=5
                     p = att.get('path')
                     if p:
                         paths.add(p)
-
+                
                 if paths:  # Only count posts with media
                     collected_posts[file_id] = []
                     for p in paths:
@@ -95,30 +95,31 @@ def collect_creator_posts(creator, platform, session, cached_ids, target_posts=5
                         out_fname = os.path.join(creator_dir, f"{file_id}-{os.path.basename(p)}")
                         collected_posts[file_id].append((download_url, out_fname))
                         total_new_posts += 1
-
+                        
                 if total_new_posts >= target_posts:
                     break
-
+            
             debug_log(f"  📄 Page {page}: Found {page_stats['new']} new posts, skipped {page_stats['cached']} cached posts", show_debug)
-
+                
             page += 1
             offset += 50
-
+            
         except Exception as e:
             debug_log(f"🔴 Failed to fetch page {page} for {creator}: {e}", show_debug)
             break
-
+    
     debug_log(f"📊 Creator {creator} summary:", show_debug)
     debug_log(f"  • Pages checked: {total_pages_checked}", show_debug)
     debug_log(f"  • Posts checked: {total_checked_posts}", show_debug)
     debug_log(f"  • New posts found: {len(collected_posts)}", show_debug)
-
+    
     return collected_posts
 
 def check_disk_space(path="."):
     """Check if enough disk space is available."""
     total, used, free = shutil.disk_usage(path)
     return free > MIN_DISK_SPACE, free / (5 * 1024 * 1024)  # Return bool and GB free
+
 def display_download_preview(unique_tasks, cached_ids, show_debug=True):
     """Display preview of upcoming downloads."""
     if not show_debug:
@@ -126,7 +127,7 @@ def display_download_preview(unique_tasks, cached_ids, show_debug=True):
 
     print("\n📊 Download Preview:")
     print("=" * 50)
-
+    
     # Group by creator and count files
     creator_stats = {}
     creator_posts = {}
@@ -147,7 +148,7 @@ def display_download_preview(unique_tasks, cached_ids, show_debug=True):
         print(f"    - Files to download: {files}")
         print(f"    - Unique posts: {posts}")
         print(f"    - Files per post: {ratio:.1f}")
-
+    
     print("\n📈 Preview Totals:")
     print("-" * 50)
     total_files = sum(creator_stats.values())
@@ -164,7 +165,7 @@ def display_download_results(unique_tasks, cached_ids, successful_downloads, suc
 
     print("\n📊 Download Results:")
     print("=" * 50)
-
+    
     # Group results by creator
     creator_stats = {}
     for (url, fname), file_id in unique_tasks.items():
@@ -196,11 +197,11 @@ def display_download_results(unique_tasks, cached_ids, successful_downloads, suc
 
 def main():
     args = parse_args()
-
+    
     # Convert comma-separated creators to lists by platform
     of_creators = [c.strip() for c in args.of_creators.split(',')] if args.of_creators else []
     fansly_creators = [c.strip() for c in args.fansly_creators.split(',')] if args.fansly_creators else []
-
+    
     cache_file = "cache/coomer_ids.json"
     os.makedirs("cache", exist_ok=True)
 
@@ -238,7 +239,7 @@ def main():
                 creator, platform, session, cached_ids,
                 args.target_posts, args.disable_cache, args.debug
             )
-
+            
             # Add tasks from this creator
             for file_id, urls_and_fnames in creator_posts.items():
                 for download_url, out_fname in urls_and_fnames:
