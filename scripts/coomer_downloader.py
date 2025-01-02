@@ -250,9 +250,6 @@ def main():
             continue
             
         for creator in creators:
-            if not creator.isdigit():
-                debug_log(f"🔴 Invalid creator ID for {platform}: {anonymize_name(creator)}", args.debug)
-                continue
                 
             debug_log(f"🟢 Processing {platform} creator: {anonymize_name(creator)}", args.debug)
             creator_posts = collect_creator_posts(
