@@ -20,7 +20,7 @@ MIN_DISK_SPACE = 2 * 1024 * 1024 * 1024  # 2GB in bytes
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Coomer.party Downloader')
-    parser.add_argument('--debug', action='store_true', default=true, help='Enable debug logging')
+    parser.add_argument('--debug', action='store_true', default=True, help='Enable debug logging')
     parser.add_argument('--disable-cache', action='store_true', help='Disable cache checking')
     parser.add_argument('--max-urls', type=int, default=MAX_URLS, help='Maximum URLs to download')
     parser.add_argument('--target-posts', type=int, default=50, help='Target posts per creator')
