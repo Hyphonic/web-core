@@ -33,7 +33,6 @@ on:
       creators:
         description: '[Coomer] Comma-separated list of creators (leave empty for default)'
         required: false
-        default: ${{ secrets.CREATORS_LIST_OF }}
         type: string
       target_posts_kemono:
         description: '[Kemono] Number of posts to fetch per creator'
