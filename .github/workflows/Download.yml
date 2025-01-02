@@ -180,7 +180,7 @@ jobs:
       - name: 🌐 Upload Coomer Posts with Rclone
         run: |
           echo "🟢 Uploading coomer posts to Pixeldrain with Rclone..."
-          rclone copy cache Pixeldrain:"🌀 Onlyfans" --disable-http2 --multi-thread-streams 6 --transfers 8 -v
+          rclone copy cache Pixeldrain:"🌀 Onlyfans" --disable-http2 --multi-thread-streams 6 --transfers 16 -v
           echo "🟢 Upload complete."
       - name: 🔧 Compute Hash of Updated coomer_ids.json
         id: compute-hash-coomer
