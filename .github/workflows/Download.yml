@@ -46,7 +46,7 @@ on:
         type: string
 
 # Add concurrency group to prevent parallel runs
-concurrency: 
+concurrency:
   group: ${{ github.workflow }}
   cancel-in-progress: true
 
@@ -130,21 +130,20 @@ jobs:
         id: collect-metadata
         run: |
           echo "🟢 Collecting metadata..."
-          # Limit to first 250 memes to prevent matrix overflow
           limited_metadata=$(jq '.[:250]' cache/memes_metadata.json)
           metadata=$(echo "$limited_metadata" | jq -c .)
           echo "metadata=$metadata" >> $GITHUB_OUTPUT
           echo "🟢 Metadata collection complete."
       - name: 🌐 Upload Memes with Rclone
         run: |
-          echo "🟢 Uploading memes to Pixeldrain with Rclone..."
+          echo "🟢 Uploading memes to Pixeldrain..."
           rclone copy cache Pixeldrain:"💯 Memes" --disable-http2 --multi-thread-streams 6 --transfers 8 -v
           echo "🟢 Upload complete."
       - name: 🔧 Compute Hash of Updated meme_ids.json
         id: compute-hash
         run: |
           echo "🟢 Computing hash of meme_ids.json..."
-          if [ -f cache/meme_ids.json ]; then
+          if [ -f cache/meme_ids.json]; then
             FILE_HASH=$(sha256sum cache/meme_ids.json | awk '{print $1}')
             echo "🟢 Computed hash: $FILE_HASH"
           else
@@ -241,10 +240,10 @@ jobs:
           echo "🟢 Listing Coomer files in cache..."
           tree cache
           echo "🟢 File listing complete."
-  
-   download-kemono:
+
+  download-kemono:
     needs: check-workflows
-    if: needs.check-workflows.outputs.should_run == 'true
+    if: needs.check-workflows.outputs.should_run == 'true'
     name: 🌐 Download Kemono
     runs-on: ubuntu-latest
     steps:
@@ -290,14 +289,14 @@ jobs:
             --max-urls "${{ inputs.max_urls_kemono || '250' }}"
       - name: 🌐 Upload Kemono Posts with Rclone
         run: |
-          echo "🟢 Uploading Kemono posts to Pixeldrain with Rclone..."
+          echo "🟢 Uploading Kemono posts to Pixeldrain..."
           rclone copy cache Pixeldrain:"🅿️ Patreon" --disable-http2 --multi-thread-streams 6 --transfers 16 -v
           echo "🟢 Upload complete."
       - name: 🔧 Compute Hash of Updated kemono_ids.json
         id: compute-hash-kemono
         run: |
           echo "🟢 Computing hash of kemono_ids.json..."
-          if [ -f cache/coomer_ids.json ]; then 
+          if [ -f cache/kemono_ids.json ]; then 
             KEMONO_HASH=$(sha256sum cache/kemono_ids.json | awk '{print $1}')
             echo "🟢 Computed hash: $KEMONO_HASH"
           else
