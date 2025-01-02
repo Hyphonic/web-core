@@ -55,6 +55,7 @@ jobs:
         with:
           python-version: '3.13'
           cache: 'pip' # caching pip dependencies
+      - run: pip install -r requirements.txt
 
       - name: 🧹 Remove Cache
         uses: DareFox/delete-cache-by-key@v1
@@ -148,6 +149,7 @@ jobs:
         with:
           python-version: '3.13'
           cache: 'pip' # caching pip dependencies
+      - run: pip install -r requirements.txt
       
       - name: 🧹 Remove Cache
         uses: DareFox/delete-cache-by-key@v1
@@ -231,6 +233,7 @@ jobs:
         with:
           python-version: '3.13'
           cache: 'pip' # caching pip dependencies
+      - run: pip install -r requirements.txt
 
       - name: 🧰 Install Python Dependencies
         run: |
