@@ -179,7 +179,7 @@ jobs:
             --max-urls "${{ inputs.max_urls || '300' }}"
       - name: 🌐 Upload Coomer Posts with Rclone
         run: |
-          echo "🟢 Uploading coomer posts to Pixeldrain with Rclone..."
+          echo "🟢 Uploading Coomer posts to Pixeldrain with Rclone..."
           rclone copy cache Pixeldrain:"🌀 Onlyfans" --disable-http2 --multi-thread-streams 6 --transfers 16 -v
           echo "🟢 Upload complete."
       - name: 🔧 Compute Hash of Updated coomer_ids.json
@@ -203,6 +203,79 @@ jobs:
       - name: 📜 List All Coomer Files
         run: |
           echo "🟢 Listing Coomer files in cache..."
+          tree cache
+          echo "🟢 File listing complete."
+
+  download-kemono:
+    name: 🌐 Download Kemono
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 📦 Set Up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: 'pip' # caching pip dependencies
+      - run: pip install -r requirements.txt
+      
+      - name: 🧹 Remove Cache
+        uses: DareFox/delete-cache-by-key@v1
+        with:
+          key: kemono-ids-cache-
+          mode: exact
+        continue-on-error: true
+
+      - name: 🚀 Restore Kemono IDs Cache
+        id: restore-kemono-cache
+        uses: actions/cache@v4
+        with:
+          path: cache/kemono_ids.json
+          key: kemono-ids-cache-
+          restore-keys: |
+            kemono-ids-cache-
+      - name: 🔧 Install Rclone
+        uses: AnimMouse/setup-rclone@v1
+        with:
+          rclone_config: ${{ secrets.PIXELDRAIN_CONF }}
+          disable_base64: true
+      - name: ⏬ Download Kemono Posts
+        env:
+          KEMONO_CREATORS: ${{ secrets.CREATORS_LIST_KEMONO }}
+        run: |
+          python scripts/kemono_downloader.py \
+            --creators "$KEMONO_CREATORS" \
+            $([ "${{ inputs.show_debug }}" == "true" ] && echo "--debug") \
+            $([ "${{ inputs.disable_cache_check }}" == "true" ] && echo "--disable-cache") \
+            --target-posts "${{ inputs.target_posts || '50' }}" \
+            --max-urls "${{ inputs.max_urls || '250' }}"
+      - name: 🌐 Upload Kemono Posts with Rclone
+        run: |
+          echo "🟢 Uploading Kemono posts to Pixeldrain with Rclone..."
+          rclone copy cache Pixeldrain:"🅿️ Patreon" --disable-http2 --multi-thread-streams 6 --transfers 16 -v
+          echo "🟢 Upload complete."
+      - name: 🔧 Compute Hash of Updated kemono_ids.json
+        id: compute-hash-kemono
+        run: |
+          echo "🟢 Computing hash of kemono_ids.json..."
+          if [ -f cache/coomer_ids.json ]; then 
+            KEMONO_HASH=$(sha256sum cache/kemono_ids.json | awk '{print $1}')
+            echo "🟢 Computed hash: $KEMONO_HASH"
+          else
+            KEMONO_HASH="empty-cache"
+            echo "🔴 kemono_ids.json not found. Using default hash."
+          fi
+          echo "kemono_hash=$KEMONO_HASH" >> $GITHUB_ENV
+      - name: 💾 Update Kemono IDs Cache
+        uses: actions/cache@v4
+        with:
+          path: cache/kemono_ids.json
+          key: kemono-ids-cache-${{ env.kemono_hash }}
+
+      - name: 📜 List All Kemono Files
+        run: |
+          echo "🟢 Listing Kemono files in cache..."
           tree cache
           echo "🟢 File listing complete."
 
