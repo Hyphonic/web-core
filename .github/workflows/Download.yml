@@ -210,8 +210,8 @@ jobs:
           python scripts/coomer_downloader.py \
             $([ "${{ inputs.show_debug }}" == "true" ] && echo "--debug") \
             $([ "${{ inputs.disable_cache_check }}" == "true" ] && echo "--disable-cache") \
-            --target-posts "${{ inputs.target_posts || '50' }}" \
-            --max-urls "${{ inputs.max_urls || '300' }}" \
+            --target-posts "${{ inputs.target_posts_coomer || '50' }}" \
+            --max-urls "${{ inputs.max_urls_coomer || '300' }}" \
             $([ ! -z "${{ inputs.creators }}" ] && echo "--creators '${{ inputs.creators }}'")
       - name: 🌐 Upload Coomer Posts with Rclone
         run: |
@@ -286,8 +286,8 @@ jobs:
             --creators "$KEMONO_CREATORS" \
             $([ "${{ inputs.show_debug }}" == "true" ] && echo "--debug") \
             $([ "${{ inputs.disable_cache_check }}" == "true" ] && echo "--disable-cache") \
-            --target-posts "${{ inputs.target_posts || '50' }}" \
-            --max-urls "${{ inputs.max_urls || '250' }}"
+            --target-posts "${{ inputs.target_posts_kemono || '50' }}" \
+            --max-urls "${{ inputs.max_urls_kemono || '250' }}"
       - name: 🌐 Upload Kemono Posts with Rclone
         run: |
           echo "🟢 Uploading Kemono posts to Pixeldrain with Rclone..."
