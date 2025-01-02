@@ -28,7 +28,7 @@ on:
       max_urls:
         description: 'Maximum total URLs to download'
         required: false
-        default: '300'
+        default: '250'
         type: string
       creators:
         description: 'Comma-separated list of creators (leave empty for default)'
