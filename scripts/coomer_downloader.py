@@ -1,4 +1,3 @@
-import os
 import json
 import shutil
 import requests
@@ -11,12 +10,11 @@ from requests.packages.urllib3.util.retry import Retry
 TIMEOUT_SECONDS = 300  # 5 minutes
 MAX_WORKERS = 8
 MAX_URLS = 250
-CREATORS = [
-    "darcyxnycole", "belledelphine", "sweetiefox_of", "soogsx",
-    "morgpie", "w0llip", "summertimejames", "f1nn5ter",
-    "jamelizzzz", "lilijunex", "lunluns"
-]
 MIN_DISK_SPACE = 2 * 1024 * 1024 * 1024  # 2GB in bytes
+PLATFORMS = {
+    'onlyfans': 'https://coomer.su/api/v1/onlyfans/user',
+    'fansly': 'https://coomer.su/api/v1/fansly/user'
+}
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Coomer.party Downloader')
@@ -24,7 +22,13 @@ def parse_args():
     parser.add_argument('--disable-cache', action='store_true', help='Disable cache checking')
     parser.add_argument('--max-urls', type=int, default=MAX_URLS, help='Maximum URLs to download')
     parser.add_argument('--target-posts', type=int, default=50, help='Target posts per creator')
+    parser.add_argument('--of-creators', type=str, required=False, help='Comma-separated list of OnlyFans creators')
+    parser.add_argument('--fansly-creators', type=str, required=False, help='Comma-separated list of Fansly creators')
     return parser.parse_args()
+
+def anonymize_name(name):
+    """Convert creator names to anonymous format (first 2 chars + ****)"""
+    return f"{name[:2]}****" if len(name) > 2 else name
 
 def debug_log(msg, show_debug=True):
     if show_debug:
@@ -42,17 +46,17 @@ def download_file(session, download_url, out_fname, file_id, show_debug=True):
         debug_log(f"  🔴 Error downloading file {file_id}: {e}", show_debug)
         return False
 
-def collect_creator_posts(creator, session, cached_ids, target_posts=50, disable_cache_check=False, show_debug=True):
-    collected_posts = {}  # {file_id: [(url, filename), ...]}
+def collect_creator_posts(creator, platform, session, cached_ids, target_posts=50, disable_cache_check=False, show_debug=True):
+    collected_posts = {}
     page = 1
-    offset = 50  # Starting offset
+    offset = 50
     total_new_posts = 0
     total_pages_checked = 0
     total_checked_posts = 0
 
     while total_new_posts < target_posts:
-        coomer_url = f"https://coomer.su/api/v1/onlyfans/user/{creator}?o={offset}"
-        debug_log(f"🟢 Fetching page {page} ({offset}) from {coomer_url}", show_debug)
+        coomer_url = f"{PLATFORMS[platform]}/{creator}?o={offset}"
+        debug_log(f"🟢 Fetching {platform} page {page} ({offset}) from {coomer_url}", show_debug)
         
         try:
             resp = session.get(coomer_url, timeout=TIMEOUT_SECONDS)
@@ -86,7 +90,7 @@ def collect_creator_posts(creator, session, cached_ids, target_posts=50, disable
                     collected_posts[file_id] = []
                     for p in paths:
                         download_url = "https://coomer.su" + p
-                        creator_dir = os.path.join("cache", creator)
+                        creator_dir = os.path.join("cache", creator)  # Simplified path
                         out_fname = os.path.join(creator_dir, f"{file_id}-{os.path.basename(p)}")
                         collected_posts[file_id].append((download_url, out_fname))
                         total_new_posts += 1
@@ -127,7 +131,7 @@ def display_download_preview(unique_tasks, cached_ids, show_debug=True):
     creator_stats = {}
     creator_posts = {}
     for (url, fname), file_id in unique_tasks.items():
-        creator = os.path.basename(os.path.dirname(fname))
+        creator = os.path.basename(os.path.dirname(fname))  # Path already simplified
         creator_stats[creator] = creator_stats.get(creator, 0) + 1
         if creator not in creator_posts:
             creator_posts[creator] = set()
@@ -139,7 +143,7 @@ def display_download_preview(unique_tasks, cached_ids, show_debug=True):
         files = creator_stats[creator]
         posts = len(creator_posts[creator])
         ratio = files / posts if posts > 0 else 0
-        print(f"  • {creator}:")
+        print(f"  • {anonymize_name(creator)}:")
         print(f"    - Files to download: {files}")
         print(f"    - Unique posts: {posts}")
         print(f"    - Files per post: {ratio:.1f}")
@@ -164,7 +168,7 @@ def display_download_results(unique_tasks, cached_ids, successful_downloads, suc
     # Group results by creator
     creator_stats = {}
     for (url, fname), file_id in unique_tasks.items():
-        creator = os.path.basename(os.path.dirname(fname))
+        creator = os.path.basename(os.path.dirname(fname))  # Path already simplified
         if creator not in creator_stats:
             creator_stats[creator] = {'total': 0, 'success': 0, 'posts': set()}
         creator_stats[creator]['total'] += 1
@@ -176,7 +180,7 @@ def display_download_results(unique_tasks, cached_ids, successful_downloads, suc
     print("-" * 50)
     for creator, stats in creator_stats.items():
         success_rate = (stats['success'] / stats['total'] * 100) if stats['total'] > 0 else 0
-        print(f"  • {creator}:")
+        print(f"  • {anonymize_name(creator)}:")
         print(f"    - Successfully downloaded: {stats['success']}/{stats['total']} files ({success_rate:.1f}%)")
         print(f"    - Unique posts added: {len(stats['posts'])}")
         if stats['posts']:
@@ -192,6 +196,11 @@ def display_download_results(unique_tasks, cached_ids, successful_downloads, suc
 
 def main():
     args = parse_args()
+    
+    # Convert comma-separated creators to lists by platform
+    of_creators = [c.strip() for c in args.of_creators.split(',')] if args.of_creators else []
+    fansly_creators = [c.strip() for c in args.fansly_creators.split(',')] if args.fansly_creators else []
+    
     cache_file = "cache/coomer_ids.json"
     os.makedirs("cache", exist_ok=True)
 
@@ -221,24 +230,25 @@ def main():
     successful_ids = set()
     successful_downloads = 0
 
-    # Collect posts from all creators
-    for creator in CREATORS:
-        debug_log(f"🟢 Processing creator: {creator}", args.debug)
-        creator_posts = collect_creator_posts(
-            creator, session, cached_ids,
-            args.target_posts, args.disable_cache, args.debug
-        )
-        
-        # Add tasks from this creator
-        for file_id, urls_and_fnames in creator_posts.items():
-            for download_url, out_fname in urls_and_fnames:
-                if len(unique_tasks) >= args.max_urls:
-                    break
-                unique_tasks[(download_url, out_fname)] = file_id
-        
-        if len(unique_tasks) >= args.max_urls:
-            debug_log(f"🟢 Reached maximum URL limit of {args.max_urls}", args.debug)
-            break
+    # Collect posts from all creators across platforms
+    for platform, creators in [('onlyfans', of_creators), ('fansly', fansly_creators)]:
+        for creator in creators:
+            debug_log(f"🟢 Processing {platform} creator: {anonymize_name(creator)}", args.debug)
+            creator_posts = collect_creator_posts(
+                creator, platform, session, cached_ids,
+                args.target_posts, args.disable_cache, args.debug
+            )
+            
+            # Add tasks from this creator
+            for file_id, urls_and_fnames in creator_posts.items():
+                for download_url, out_fname in urls_and_fnames:
+                    if len(unique_tasks) >= args.max_urls:
+                        break
+                    unique_tasks[(download_url, out_fname)] = file_id
+            
+            if len(unique_tasks) >= args.max_urls:
+                debug_log(f"🟢 Reached maximum URL limit of {args.max_urls}", args.debug)
+                break
 
     # Convert tasks for parallel download
     tasks = [(k[0], k[1], v) for k, v in unique_tasks.items()]
