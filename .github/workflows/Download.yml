@@ -165,15 +165,18 @@ jobs:
         with:
           rclone_config: ${{ secrets.PIXELDRAIN_CONF }}
           disable_base64: true
-      - name: ⏬ Download Coomer Posts (Parallel)
+      - name: ⏬ Download Coomer Posts
+        env:
+          OF_CREATORS: ${{ secrets.CREATORS_LIST_OF }}
+          FANSLY_CREATORS: ${{ secrets.CREATORS_LIST_FANSLY }}
         run: |
           python scripts/coomer_downloader.py \
+            --of-creators "$OF_CREATORS" \
+            --fansly-creators "$FANSLY_CREATORS" \
             $([ "${{ inputs.show_debug }}" == "true" ] && echo "--debug") \
             $([ "${{ inputs.disable_cache_check }}" == "true" ] && echo "--disable-cache") \
             --target-posts "${{ inputs.target_posts || '50' }}" \
-            --max-urls "${{ inputs.max_urls || '300' }}" \
-            $([ ! -z "${{ inputs.creators }}" ] && echo "--creators '${{ inputs.creators }}'") \
-            $([ "${{ inputs.delete_cache }}" == "true" ] && echo "--delete-cache")
+            --max-urls "${{ inputs.max_urls || '300' }}"
       - name: 🌐 Upload Coomer Posts with Rclone
         run: |
           echo "🟢 Uploading coomer posts to Pixeldrain with Rclone..."
