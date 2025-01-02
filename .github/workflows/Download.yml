@@ -2,46 +2,84 @@ name: Download Posts
 
 on:
   schedule:
-    - cron: '*/10 * * * *'
+    - cron: '*/5 * * * *'
   workflow_dispatch:
     inputs:
       disable_cache_check:
-        description: 'Disable cache check (true/false)'
+        description: '[Global] Disable cache check (true/false)'
         required: false
         default: false
         type: boolean
       show_debug:
-        description: 'Enable debug messages (true/false)'
+        description: '[Global] Enable debug messages (true/false)'
         required: true
         default: true
         type: boolean
       post_limit:
-        description: 'Number of posts to fetch from each subreddit'
+        description: '[Reddit] Number of posts to fetch from each subreddit'
         required: false
         default: '5'
         type: string
-      target_posts:
-        description: 'Number of posts to fetch per creator'
+      target_posts_coomer:
+        description: '[Coomer] Number of posts to fetch per creator'
         required: false
-        default: '50'
+        default: '300'
         type: string
-      max_urls:
-        description: 'Maximum total URLs to download'
+      max_urls_coomer:
+        description: '[Coomer] Maximum total URLs to download'
         required: false
         default: '250'
         type: string
       creators:
-        description: 'Comma-separated list of creators (leave empty for default)'
+        description: '[Coomer] Comma-separated list of creators (leave empty for default)'
         required: false
         type: string
-      delete_cache:
-        description: 'Delete existing cache before starting'
+     target_posts_kemono:
+        description: '[Kemono] Number of posts to fetch per creator'
         required: false
-        default: false
-        type: boolean
+        default: '150'
+        type: string
+      max_urls_kemono:
+        description: '[Kemono] Maximum total URLs to download'
+        required: false
+        default: '100'
+        type: string
+
+# Add concurrency group to prevent parallel runs
+concurrency: 
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
 
 jobs:
+  check-workflows:
+    name: 🔍 Check Running Workflows
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.check.outputs.should_run }}
+    steps:
+      - name: 🔍 Check for running workflows
+        id: check
+        run: |
+          # Get running workflows excluding current
+          RUNNING=$(gh api \
+            -H "Accept: application/vnd.github+json" \
+            /repos/${{ github.repository }}/actions/runs \
+            --jq '.workflow_runs[] | select(.status=="in_progress" or .status=="queued") | select(.id!=${{ github.run_id }}) | .id' \
+            | wc -l)
+          
+          if [ "$RUNNING" -gt "0" ]; then
+            echo "🔴 Found $RUNNING other running workflows - skipping"
+            echo "should_run=false" >> $GITHUB_OUTPUT
+          else
+            echo "🟢 No other workflows running"
+            echo "should_run=true" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+
   download-memes:
+    needs: check-workflows
+    if: needs.check-workflows.outputs.should_run == 'true'
     name: 🌐 Download Memes
     runs-on: ubuntu-latest
     outputs:
@@ -132,6 +170,8 @@ jobs:
           path: cache/
 
   download-coomer:
+    needs: check-workflows
+    if: needs.check-workflows.outputs.should_run == 'true'
     name: 🌐 Download Coomer
     runs-on: ubuntu-latest
     steps:
@@ -165,22 +205,18 @@ jobs:
         with:
           rclone_config: ${{ secrets.PIXELDRAIN_CONF }}
           disable_base64: true
-      - name: ⏬ Download Coomer Posts
-        env:
-          OF_CREATORS: ${{ secrets.CREATORS_LIST_OF }}
-          FANSLY_CREATORS: ${{ secrets.CREATORS_LIST_FANSLY }}
+      - name: ⏬ Download Coomer Posts (Parallel)
         run: |
           python scripts/coomer_downloader.py \
-            --of-creators "$OF_CREATORS" \
-            --fansly-creators "$FANSLY_CREATORS" \
             $([ "${{ inputs.show_debug }}" == "true" ] && echo "--debug") \
             $([ "${{ inputs.disable_cache_check }}" == "true" ] && echo "--disable-cache") \
             --target-posts "${{ inputs.target_posts || '50' }}" \
-            --max-urls "${{ inputs.max_urls || '300' }}"
+            --max-urls "${{ inputs.max_urls || '300' }}" \
+            $([ ! -z "${{ inputs.creators }}" ] && echo "--creators '${{ inputs.creators }}'")
       - name: 🌐 Upload Coomer Posts with Rclone
         run: |
-          echo "🟢 Uploading Coomer posts to Pixeldrain with Rclone..."
-          rclone copy cache Pixeldrain:"🌀 Onlyfans" --disable-http2 --multi-thread-streams 6 --transfers 16 -v
+          echo "🟢 Uploading coomer posts to Pixeldrain with Rclone..."
+          rclone copy cache Pixeldrain:"🌀 Onlyfans" --disable-http2 --multi-thread-streams 6 --transfers 8 -v
           echo "🟢 Upload complete."
       - name: 🔧 Compute Hash of Updated coomer_ids.json
         id: compute-hash-coomer
@@ -205,8 +241,10 @@ jobs:
           echo "🟢 Listing Coomer files in cache..."
           tree cache
           echo "🟢 File listing complete."
-
-  download-kemono:
+  
+   download-kemono:
+    needs: check-workflows
+    if: needs.check-workflows.outputs.should_run == 'true
     name: 🌐 Download Kemono
     runs-on: ubuntu-latest
     steps:
