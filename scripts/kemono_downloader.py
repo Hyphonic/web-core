@@ -210,7 +210,7 @@ def main():
         debug_log("🔴 No cache found. Starting fresh.", args.debug)
 
     session = requests.Session()
-    retry = Retry(total=3, backoff_factor=1, status_forcelist=[502, 503, 504])
+    retry = Retry(total=1, backoff_factor=1, status_forcelist=[502, 503, 504])
     adapter = HTTPAdapter(max_retries=retry)
     session.mount('http://', adapter)
     session.mount('https://', adapter)
