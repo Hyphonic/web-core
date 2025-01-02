@@ -2,7 +2,7 @@ name: Download Posts
 
 on:
   schedule:
-    - cron: '*/5 * * * *'
+    - cron: "*/5 * * * *"
   workflow_dispatch:
     inputs:
       disable_cache_check:
@@ -34,7 +34,7 @@ on:
         description: '[Coomer] Comma-separated list of creators (leave empty for default)'
         required: false
         type: string
-     target_posts_kemono:
+      target_posts_kemono:
         description: '[Kemono] Number of posts to fetch per creator'
         required: false
         default: '150'
