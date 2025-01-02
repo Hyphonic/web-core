@@ -28,7 +28,7 @@ on:
       max_urls:
         description: 'Maximum total URLs to download'
         required: false
-        default: '150'
+        default: '300'
         type: string
       creators:
         description: 'Comma-separated list of creators (leave empty for default)'
@@ -182,7 +182,7 @@ jobs:
             $([ "${{ inputs.show_debug }}" == "true" ] && echo "--debug") \
             $([ "${{ inputs.disable_cache_check }}" == "true" ] && echo "--disable-cache") \
             --target-posts "${{ inputs.target_posts || '50' }}" \
-            --max-urls "${{ inputs.max_urls || '150' }}" \
+            --max-urls "${{ inputs.max_urls || '300' }}" \
             $([ ! -z "${{ inputs.creators }}" ] && echo "--creators '${{ inputs.creators }}'") \
             $([ "${{ inputs.delete_cache }}" == "true" ] && echo "--delete-cache")
       - name: 🌐 Upload Coomer Posts with Rclone
