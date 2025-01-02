@@ -6,6 +6,9 @@ import concurrent.futures
 import argparse
 from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util.retry import Retry
+import threading
+import time
+import sys
 
 # Constants and Configuration
 TIMEOUT_SECONDS = 300  # 5 minutes
@@ -110,11 +113,6 @@ def collect_creator_posts(creator, session, cached_ids, target_posts=50, disable
     
     return collected_posts
 
-def check_disk_space(path="."):
-    """Check if enough disk space is available."""
-    total, used, free = shutil.disk_usage(path)
-    return free > MIN_DISK_SPACE, free / (5 * 1024 * 1024)  # Return bool and GB free
-
 def display_download_preview(unique_tasks, cached_ids, show_debug=True):
     """Display preview of upcoming downloads."""
     if not show_debug:
@@ -188,6 +186,18 @@ def display_download_results(unique_tasks, cached_ids, successful_downloads, suc
     print(f"  • Total cache size: {len(cached_ids)}")
     print("=" * 50 + "\n")
 
+LOW_SPACE_EVENT = threading.Event()
+
+def watch_storage_space(path=".", gb_limit=2):
+    """Background thread to monitor disk space and signal when it's <= gb_limit."""
+    while not LOW_SPACE_EVENT.is_set():
+        total, used, free = shutil.disk_usage(path)
+        free_gb = free / (1024 * 1024 * 1024)
+        if free_gb <= gb_limit:
+            LOW_SPACE_EVENT.set()
+            break
+        time.sleep(5)  # check every 5 seconds
+
 def main():
     args = parse_args()
     
@@ -196,10 +206,10 @@ def main():
     cache_file = "cache/kemono_ids.json"
     os.makedirs("cache", exist_ok=True)
 
-    has_space, gb_free = check_disk_space("cache")
-    if not has_space:
-        debug_log(f"🔴 Not enough disk space! Only {gb_free:.1f}GB free. Need at least 2GB.", args.debug)
-        return
+    # Start background disk-space monitor
+    monitor_thread = threading.Thread(target=watch_storage_space, args=("cache", 2))
+    monitor_thread.daemon = True
+    monitor_thread.start()
 
     try:
         with open(cache_file, "r") as f:
@@ -210,7 +220,7 @@ def main():
         debug_log("🔴 No cache found. Starting fresh.", args.debug)
 
     session = requests.Session()
-    retry = Retry(total=1, backoff_factor=1, status_forcelist=[502, 503, 504])
+    retry = Retry(total=3, backoff_factor=1, status_forcelist=[502, 503, 504])
     adapter = HTTPAdapter(max_retries=retry)
     session.mount('http://', adapter)
     session.mount('https://', adapter)
@@ -251,12 +261,10 @@ def main():
             for (url, fname, fid) in tasks
         }
         for future in concurrent.futures.as_completed(future_map):
-            # Check disk space every 10 downloads
-            if completed % 10 == 0:
-                has_space, gb_free = check_disk_space("cache")
-                if not has_space:
-                    debug_log(f"🔴 Stopping downloads - Only {gb_free:.1f}GB free space left!", args.debug)
-                    break
+            # If disk space is low, stop new downloads
+            if LOW_SPACE_EVENT.is_set():
+                debug_log("🔴 Low disk space, stopping downloads gracefully.", args.debug)
+                break
 
             url, fname, fid = future_map[future]
             success = future.result()
@@ -283,6 +291,11 @@ def main():
         debug_log(f"🟢 Added {len(successful_ids)} new posts ({successful_downloads} files) to cache.", args.debug)
     else:
         debug_log("🟠 No New Items Found!", args.debug)
+
+    # If we ran out of disk space, gracefully return success code
+    if LOW_SPACE_EVENT.is_set():
+        debug_log("🔴 Exiting with code 0 due to low disk space (partial downloads).", args.debug)
+        sys.exit(0)
 
 if __name__ == "__main__":
     main()
