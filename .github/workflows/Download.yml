@@ -72,12 +72,6 @@ jobs:
           key: meme-ids-cache-
           restore-keys: |
             meme-ids-cache-
-      - name: 🧰 Install Dependencies
-        run: |
-          echo "🟢 Upgrading pip..."
-          python -m pip install --upgrade pip
-          echo "🟢 Installing PRAW, Requests, and yt_dlp..."
-          pip install praw requests yt-dlp
       - name: 🔧 Install Rclone
         uses: AnimMouse/setup-rclone@v1
         with:
@@ -166,11 +160,6 @@ jobs:
           key: coomer-ids-cache-
           restore-keys: |
             coomer-ids-cache-
-      - name: 🧰 Install Dependencies
-        run: |
-          echo "🟢 Installing dependencies..."
-          python -m pip install --upgrade pip
-          pip install requests
       - name: 🔧 Install Rclone
         uses: AnimMouse/setup-rclone@v1
         with:
@@ -221,25 +210,17 @@ jobs:
     steps:
       - name: 📥 Check Out Repository
         uses: actions/checkout@v4
-
       - name: 📤 Download Cache Artifact
         uses: actions/download-artifact@v4
         with:
           name: meme-cache
           path: cache/
-
       - name: 📦 Set Up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.13'
           cache: 'pip' # caching pip dependencies
       - run: pip install -r requirements.txt
-
-      - name: 🧰 Install Python Dependencies
-        run: |
-          echo "🟢 Installing python-telegram-bot..."
-          pip install python-telegram-bot
-          echo "🟢 Python dependencies installed."
       - name: 📤 Send Memes to Telegram
         run: |
           echo "📤 Starting to send memes to Telegram..."
