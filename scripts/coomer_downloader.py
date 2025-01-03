@@ -87,19 +87,20 @@ def get_system_info():
     return "\n".join(panel)
 
 def download_file(session, download_url, out_fname, file_id, show_debug=True):
+    """Download file using streaming to minimize memory usage"""
     thread_name = threading.current_thread().name
     with downloads_lock:
         active_downloads[thread_name] = (file_id, datetime.now())
     
     try:
-        result = False
-        r = session.get(download_url, timeout=TIMEOUT_SECONDS)
-        r.raise_for_status()
         os.makedirs(os.path.dirname(out_fname), exist_ok=True)
-        with open(out_fname, "wb") as out:
-            out.write(r.content)
-        result = True
-        return result
+        with session.get(download_url, stream=True, timeout=TIMEOUT_SECONDS) as r:
+            r.raise_for_status()
+            with open(out_fname, "wb") as f:
+                for chunk in r.iter_content(chunk_size=1024*1024):  # 1MB chunks
+                    if chunk:  # Filter out keep-alive chunks
+                        f.write(chunk)
+        return True
     except Exception as e:
         debug_log(f"  🔴 Error downloading file {file_id}: {e}", show_debug)
         return False
