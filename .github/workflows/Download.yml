@@ -44,6 +44,20 @@ on:
         required: false
         default: '100'
         type: string
+      target_posts_rule34:
+        description: '[Rule34] Number of posts to fetch per creator'
+        required: false
+        default: '300'
+        type: string
+      max_urls_rule34:
+        description: '[Rule34] Maximum total URLs to download'
+        required: false
+        default: '250'
+        type: string
+      creators_rule34:
+        description: '[Rule34] Comma-separated list of creator tags'
+        required: false
+        type: string
 
 # Add concurrency group to prevent parallel runs
 #concurrency:
@@ -218,11 +232,10 @@ jobs:
           python scripts/coomer_downloader.py \
             $([ "${{ inputs.show_debug }}" == "true" ] && echo "--debug") \
             $([ "${{ inputs.disable_cache_check }}" == "true" ] && echo "--disable-cache") \
-            --target-posts "${{ inputs.target_posts_coomer || '1000' }}" \
-            --max-urls "${{ inputs.max_urls_coomer || '1000' }}" \
+            --target-posts "${{ inputs.target_posts_coomer || '300' }}" \
+            --max-urls "${{ inputs.max_urls_coomer || '250' }}" \
             --of-creators "$OF_CREATORS" \
             --fansly-creators "$FANSLY_CREATORS"
-        continue-on-error: true
       - name: 🌐 Upload Coomer Posts with Rclone
         run: |
           echo "🟢 Uploading coomer posts to Pixeldrain with Rclone..."
@@ -251,6 +264,7 @@ jobs:
           echo "🟢 Listing Coomer files in cache..."
           tree cache
           echo "🟢 File listing complete."
+
   download-kemono:
     needs: check-workflows
     if: needs.check-workflows.outputs.should_run == 'true'
@@ -303,7 +317,6 @@ jobs:
             $([ "${{ inputs.disable_cache_check }}" == "true" ] && echo "--disable-cache") \
             --target-posts "${{ inputs.target_posts_kemono || '150' }}" \
             --max-urls "${{ inputs.max_urls_kemono || '100' }}"
-        continue-on-error: true
       - name: 🌐 Upload Kemono Posts with Rclone
         run: |
           echo "🟢 Uploading Kemono posts to Pixeldrain..."
@@ -332,6 +345,92 @@ jobs:
           echo "🟢 Listing Kemono files in cache..."
           tree cache
           echo "🟢 File listing complete."
+
+  download-rule34:
+    needs: check-workflows
+    if: needs.check-workflows.outputs.should_run == 'true'
+    name: 🌐 Download Rule34
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🧹 Free Up Space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: true
+
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 📦 Set Up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: 'pip'
+      - run: pip install -r requirements.txt
+      
+      - name: 🧹 Remove Cache
+        uses: DareFox/delete-cache-by-key@v1
+        with:
+          key: rule34-ids-cache-
+          mode: exact
+        continue-on-error: true
+
+      - name: 🚀 Restore Rule34 IDs Cache
+        id: restore-rule34-cache
+        uses: actions/cache@v4
+        with:
+          path: cache/rule34_ids.json
+          key: rule34-ids-cache-
+          restore-keys: |
+            rule34-ids-cache-
+
+      - name: 🔧 Install Rclone
+        uses: AnimMouse/setup-rclone@v1
+        with:
+          rclone_config: ${{ secrets.PIXELDRAIN_CONF }}
+          disable_base64: true
+
+      - name: ⏬ Download Rule34 Posts
+        env:
+          CREATORS: ${{ secrets.CREATORS_LIST_RULE34 }}
+        run: |
+          python scripts/rule34_downloader.py \
+            $([ "${{ inputs.show_debug }}" == "true" ] && echo "--debug") \
+            $([ "${{ inputs.disable_cache_check }}" == "true" ] && echo "--disable-cache") \
+            --target-posts "${{ inputs.target_posts_rule34 || '300' }}" \
+            --max-urls "${{ inputs.max_urls_rule34 || '250' }}" \
+            --creators "$CREATORS_RULE34"
+
+      - name: 🌐 Upload Rule34 Posts with Rclone
+        run: |
+          echo "🟢 Uploading rule34 posts to Pixeldrain..."
+          rclone copy cache Pixeldrain:"🎨 Rule34" --disable-http2 --multi-thread-streams 6 --transfers 8 -v
+          echo "🟢 Upload complete."
+
+      - name: 🔧 Compute Hash of Updated rule34_ids.json
+        id: compute-hash-rule34
+        run: |
+          echo "🟢 Computing hash of rule34_ids.json..."
+          if [ -f cache/rule34_ids.json ]; then 
+            RULE34_HASH=$(sha256sum cache/rule34_ids.json | awk '{print $1}')
+            echo "🟢 Computed hash: $RULE34_HASH"
+          else
+            RULE34_HASH="empty-cache"
+            echo "🔴 rule34_ids.json not found. Using default hash."
+          fi
+          echo "rule34_hash=$RULE34_HASH" >> $GITHUB_ENV
+
+      - name: 💾 Update Rule34 IDs Cache
+        uses: actions/cache@v4
+        with:
+          path: cache/rule34_ids.json
+          key: rule34-ids-cache-${{ env.rule34_hash }}
+
+      - name: 📜 List All Rule34 Files
+        run: |
+          echo "🟢 Listing Rule34 files in cache..."
+          tree cache
+          echo "🟢 File listing complete."
+
   send-to-telegram:
     needs: download-memes
     name: 📤 Send All Memes to Telegram
