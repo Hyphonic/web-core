@@ -38,6 +38,10 @@ def parse_args():
     parser.add_argument('--creators', type=str, required=False, help='Comma-separated list of creator tags')
     return parser.parse_args()
 
+def debug_log(msg, show_debug=True):
+    if show_debug:
+        print(msg)
+
 def collect_creator_posts(creator, session, cached_ids, target_posts=50, disable_cache_check=False, show_debug=True):
     collected_posts = {}
     page = 0  # Rule34 starts at page 0
