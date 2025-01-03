@@ -1,6 +1,8 @@
 name: Download Posts
 
 on:
+  schedule:
+    - cron: "*/5 * * * *"
   workflow_dispatch:
     inputs:
       disable_cache_check:
@@ -49,7 +51,19 @@ on:
 #  cancel-in-progress: true
 
 jobs:
+  free-space:
+    name: 🧹 Free Up Space
+    runs-on: ubuntu-latest
+    steps:
+    - name: 🧹 Free Up Space
+      uses: jlumbroso/free-disk-space@main
+      with:
+        # this might remove tools that are actually needed,
+        # if set to "true" but frees about 6 GB
+        tool-cache: true
+
   check-workflows:
+    needs: free-space
     name: 🔍 Check Running Workflows
     runs-on: ubuntu-latest
     outputs:
