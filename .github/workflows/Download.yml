@@ -392,8 +392,8 @@ jobs:
           python scripts/rule34_downloader.py \
             $([ "${{ inputs.show_debug }}" == "true" ] && echo "--debug") \
             $([ "${{ inputs.disable_cache_check }}" == "true" ] && echo "--disable-cache") \
-            --target-posts "${{ inputs.target_posts_rule34 || '300' }}" \
-            --max-urls "${{ inputs.max_urls_rule34 || '250' }}" \
+            --target-posts "${{ inputs.target_posts_rule34 || '1000' }}" \
+            --max-urls "${{ inputs.max_urls_rule34 || '1000' }}" \
             --creators "$CREATORS"
 
       - name: 🌐 Upload Rule34 Posts with Rclone
