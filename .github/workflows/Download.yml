@@ -218,8 +218,8 @@ jobs:
           python scripts/coomer_downloader.py \
             $([ "${{ inputs.show_debug }}" == "true" ] && echo "--debug") \
             $([ "${{ inputs.disable_cache_check }}" == "true" ] && echo "--disable-cache") \
-            --target-posts "${{ inputs.target_posts_coomer || '300' }}" \
-            --max-urls "${{ inputs.max_urls_coomer || '250' }}" \
+            --target-posts "${{ inputs.target_posts_coomer || '1000' }}" \
+            --max-urls "${{ inputs.max_urls_coomer || '1000' }}" \
             --of-creators "$OF_CREATORS" \
             --fansly-creators "$FANSLY_CREATORS"
         continue-on-error: true
