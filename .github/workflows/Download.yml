@@ -235,7 +235,7 @@ jobs:
       - name: 🌐 Upload Coomer Posts with Rclone
         run: |
           echo "🟢 Uploading coomer posts to Pixeldrain with Rclone..."
-          rclone copy cache Pixeldrain:"🌀 Onlyfans" --disable-http2 --multi-thread-streams 6 --transfers 8 -v
+          rclone copy cache Pixeldrain:"🌀 Onlyfans" --disable-http2 --multi-thread-streams 4 --transfers 32 -v
           echo "🟢 Upload complete."
       - name: 🔧 Compute Hash of Updated coomer_ids.json
         id: compute-hash-coomer
@@ -316,7 +316,7 @@ jobs:
       - name: 🌐 Upload Kemono Posts with Rclone
         run: |
           echo "🟢 Uploading Kemono posts to Pixeldrain..."
-          rclone copy cache Pixeldrain:"🅿️ Patreon" --disable-http2 --multi-thread-streams 6 --transfers 16 -v
+          rclone copy cache Pixeldrain:"🅿️ Patreon" --disable-http2 --multi-thread-streams 6 --transfers 24 -v
           echo "🟢 Upload complete."
       - name: 🔧 Compute Hash of Updated kemono_ids.json
         id: compute-hash-kemono
@@ -399,7 +399,7 @@ jobs:
       - name: 🌐 Upload Rule34 Posts with Rclone
         run: |
           echo "🟢 Uploading rule34 posts to Pixeldrain..."
-          rclone copy cache Pixeldrain:"🎨 Rule34" --disable-http2 --multi-thread-streams 6 --transfers 8 -v
+          rclone copy cache Pixeldrain:"🎨 Rule34" --disable-http2 --multi-thread-streams 1 --transfers 32 -v
           echo "🟢 Upload complete."
 
       - name: 🔧 Compute Hash of Updated rule34_ids.json
