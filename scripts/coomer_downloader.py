@@ -23,11 +23,16 @@ PLATFORMS = {
 
 active_downloads = {}
 downloads_lock = threading.Lock()
-STOP_MONITOR = threading.Event()
 
 # Add to top with other globals
 total_downloaded_bytes = 0
 download_bytes_lock = threading.Lock()
+
+# Add to globals section
+last_bytes_check = 0
+last_check_time = time.time()
+current_speed = 0  # bytes per second
+speed_lock = threading.Lock()
 
 def format_size(bytes):
     """Convert bytes to human readable format"""
@@ -55,6 +60,20 @@ def debug_log(msg, show_debug=True):
     if show_debug:
         print(msg)
 
+def calculate_speed(new_bytes):
+    """Calculate current download speed"""
+    global last_bytes_check, last_check_time, current_speed
+    
+    with speed_lock:
+        now = time.time()
+        time_diff = now - last_check_time
+        if time_diff > 0:
+            bytes_diff = new_bytes - last_bytes_check
+            current_speed = bytes_diff / time_diff
+            last_bytes_check = new_bytes
+            last_check_time = now
+        return current_speed
+
 def get_system_info():
     """Get formatted system information panel"""
     # Disk info
@@ -75,6 +94,9 @@ def get_system_info():
     global total_downloaded_bytes
     total_downloaded = format_size(total_downloaded_bytes)
 
+    # Get current speed
+    speed = format_size(current_speed) + "/s"
+
     # Active downloads
     with downloads_lock:
         current_tasks = list(active_downloads.items())
@@ -87,6 +109,7 @@ def get_system_info():
         f"  • Used:  {disk_used_gb:.1f}GB ({disk_percent}%)",
         f"  • Free:  {disk_free_gb:.1f}GB ({100-disk_percent}%)",
         f"  • Downloaded: {total_downloaded}",
+        f"  • Speed: {speed}",
         "",
         f"🧠 Memory Usage:",
         f"  • Total: {mem_total_gb:.1f}GB",
@@ -117,14 +140,17 @@ def download_file(session, download_url, out_fname, file_id, show_debug=True):
             r.raise_for_status()
             with open(out_fname, "wb") as f:
                 bytes_downloaded = 0
+                start_time = time.time()
                 for chunk in r.iter_content(chunk_size=1024*1024):  # 1MB chunks
                     if chunk:
                         bytes_downloaded += len(chunk)
                         f.write(chunk)
-                # Update total downloaded bytes
+                        
+                # Update total and calculate speed
                 global total_downloaded_bytes
                 with download_bytes_lock:
                     total_downloaded_bytes += bytes_downloaded
+                    calculate_speed(total_downloaded_bytes)
         return True
     except Exception as e:
         debug_log(f"  🔴 Error downloading file {file_id}: {e}", show_debug)
@@ -136,7 +162,7 @@ def download_file(session, download_url, out_fname, file_id, show_debug=True):
 def collect_creator_posts(creator, platform, session, cached_ids, target_posts=50, disable_cache_check=False, show_debug=True):
     collected_posts = {}
     page = 1
-    offset = 0
+    offset = 50
     total_new_posts = 0
     total_pages_checked = 0
     total_checked_posts = 0
@@ -281,19 +307,8 @@ def display_download_results(unique_tasks, cached_ids, successful_downloads, suc
     print(f"  • Total cache size: {len(cached_ids)}")
     print("=" * 50 + "\n")
 
-def monitor_system():
-    """Background thread to display system info every 30 seconds"""
-    while not STOP_MONITOR.is_set():
-        debug_log(get_system_info(), True)
-        time.sleep(30)
-
 def main():
     args = parse_args()
-    
-    # Start system monitor thread
-    monitor_thread = threading.Thread(target=monitor_system)
-    monitor_thread.daemon = True
-    monitor_thread.start()
     
     # Debug creator lists
     of_creators = []
@@ -416,10 +431,6 @@ def main():
         debug_log(f"🟢 Added {len(successful_ids)} new posts ({successful_downloads} files) to cache.", args.debug)
     else:
         debug_log("🟠 No New Items Found!", args.debug)
-
-    # Stop monitor thread
-    STOP_MONITOR.set()
-    monitor_thread.join(timeout=1)
 
 if __name__ == "__main__":
     main()
