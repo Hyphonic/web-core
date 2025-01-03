@@ -2,3 +2,4 @@ requests
 praw
 yt-dlp
 python-telegram-bot
+psutil
