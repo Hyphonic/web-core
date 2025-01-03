@@ -394,7 +394,7 @@ jobs:
             $([ "${{ inputs.disable_cache_check }}" == "true" ] && echo "--disable-cache") \
             --target-posts "${{ inputs.target_posts_rule34 || '300' }}" \
             --max-urls "${{ inputs.max_urls_rule34 || '250' }}" \
-            --creators "$CREATORS_RULE34"
+            --creators "$CREATORS"
 
       - name: 🌐 Upload Rule34 Posts with Rclone
         run: |
