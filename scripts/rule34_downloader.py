@@ -180,20 +180,14 @@ def display_download_results(unique_tasks, cached_ids, successful_downloads, suc
 def main():
     args = parse_args()
     
-    # Debug creator lists
-    of_creators = []
-    fansly_creators = []
+    # Parse creators list
+    creators = []
+    if args.creators:
+        creators = [c.strip() for c in args.creators.split(',') if c.strip()]
+        debug_log(f"🔵 Found {len(creators)} Rule34 creators: {[anonymize_name(c) for c in creators]}", args.debug)
     
-    if args.of_creators:
-        of_creators = [c.strip() for c in args.of_creators.split(',') if c.strip()]
-        debug_log(f"🔵 Found {len(of_creators)} OnlyFans creators: {[anonymize_name(c) for c in of_creators]}", args.debug)
-    
-    if args.fansly_creators:
-        fansly_creators = [c.strip() for c in args.fansly_creators.split(',') if c.strip()]
-        debug_log(f"🔵 Found {len(fansly_creators)} Fansly creators: {[anonymize_name(c) for c in fansly_creators]}", args.debug)
-    
-    if not of_creators and not fansly_creators:
-        debug_log("🔴 No creators specified for any platform!", args.debug)
+    if not creators:
+        debug_log("🔴 No Rule34 creators specified!", args.debug)
         return
 
     cache_file = "cache/rule34_ids.json"
@@ -225,30 +219,24 @@ def main():
     successful_ids = set()
     successful_downloads = 0
 
-    # Collect posts from all creators across platforms
-    for platform, creators in [('onlyfans', of_creators), ('fansly', fansly_creators)]:
-        if not creators:
-            debug_log(f"🔵 Skipping {platform} - no creators specified", args.debug)
-            continue
-            
-        for creator in creators:
-                
-            debug_log(f"🟢 Processing {platform} creator: {anonymize_name(creator)}", args.debug)
-            creator_posts = collect_creator_posts(
-                creator, platform, session, cached_ids,
-                args.target_posts, args.disable_cache, args.debug
-            )
-            
-            # Add tasks from this creator
-            for file_id, urls_and_fnames in creator_posts.items():
-                for download_url, out_fname in urls_and_fnames:
-                    if len(unique_tasks) >= args.max_urls:
-                        break
-                    unique_tasks[(download_url, out_fname)] = file_id
-            
-            if len(unique_tasks) >= args.max_urls:
-                debug_log(f"🟢 Reached maximum URL limit of {args.max_urls}", args.debug)
-                break
+    # Collect posts from all creators
+    for creator in creators:
+        debug_log(f"🟢 Processing Rule34 creator: {anonymize_name(creator)}", args.debug)
+        creator_posts = collect_creator_posts(
+            creator, session, cached_ids,
+            args.target_posts, args.disable_cache, args.debug
+        )
+        
+        # Add tasks from this creator
+        for file_id, urls_and_fnames in creator_posts.items():
+            for download_url, out_fname in urls_and_fnames:
+                if len(unique_tasks) >= args.max_urls:
+                    break
+                unique_tasks[(download_url, out_fname)] = file_id
+        
+        if len(unique_tasks) >= args.max_urls:
+            debug_log(f"🟢 Reached maximum URL limit of {args.max_urls}", args.debug)
+            break
 
     # Convert tasks for parallel download
     tasks = [(k[0], k[1], v) for k, v in unique_tasks.items()]
