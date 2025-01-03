@@ -51,19 +51,7 @@ on:
 #  cancel-in-progress: true
 
 jobs:
-  free-space:
-    name: 🧹 Free Up Space
-    runs-on: ubuntu-latest
-    steps:
-    - name: 🧹 Free Up Space
-      uses: jlumbroso/free-disk-space@main
-      with:
-        # this might remove tools that are actually needed,
-        # if set to "true" but frees about 6 GB
-        tool-cache: true
-
   check-workflows:
-    needs: free-space
     name: 🔍 Check Running Workflows
     runs-on: ubuntu-latest
     outputs:
@@ -186,6 +174,12 @@ jobs:
     name: 🌐 Download Coomer
     runs-on: ubuntu-latest
     steps:
+      - name: 🧹 Free Up Space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          # this might remove tools that are actually needed,
+          # if set to "true" but frees about 6 GB
+          tool-cache: true
       - name: 📥 Checkout Code
         uses: actions/checkout@v4
 
@@ -262,6 +256,12 @@ jobs:
     name: 🌐 Download Kemono
     runs-on: ubuntu-latest
     steps:
+      - name: 🧹 Free Up Space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          # this might remove tools that are actually needed,
+          # if set to "true" but frees about 6 GB
+          tool-cache: true
       - name: 📥 Checkout Code
         uses: actions/checkout@v4
 
