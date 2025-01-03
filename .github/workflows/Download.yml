@@ -222,6 +222,7 @@ jobs:
             --max-urls "${{ inputs.max_urls_coomer || '250' }}" \
             --of-creators "$OF_CREATORS" \
             --fansly-creators "$FANSLY_CREATORS"
+        continue-on-error: true
       - name: 🌐 Upload Coomer Posts with Rclone
         run: |
           echo "🟢 Uploading coomer posts to Pixeldrain with Rclone..."
@@ -302,6 +303,7 @@ jobs:
             $([ "${{ inputs.disable_cache_check }}" == "true" ] && echo "--disable-cache") \
             --target-posts "${{ inputs.target_posts_kemono || '150' }}" \
             --max-urls "${{ inputs.max_urls_kemono || '100' }}"
+        continue-on-error: true
       - name: 🌐 Upload Kemono Posts with Rclone
         run: |
           echo "🟢 Uploading Kemono posts to Pixeldrain..."
