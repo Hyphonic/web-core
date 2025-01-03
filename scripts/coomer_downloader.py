@@ -9,6 +9,7 @@ from requests.packages.urllib3.util.retry import Retry
 import psutil
 import threading
 from datetime import datetime
+import time
 
 # Constants and Configuration
 TIMEOUT_SECONDS = 300  # 5 minutes
@@ -22,6 +23,7 @@ PLATFORMS = {
 
 active_downloads = {}
 downloads_lock = threading.Lock()
+STOP_MONITOR = threading.Event()
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Coomer.party Downloader')
@@ -253,8 +255,19 @@ def display_download_results(unique_tasks, cached_ids, successful_downloads, suc
     print(f"  • Total cache size: {len(cached_ids)}")
     print("=" * 50 + "\n")
 
+def monitor_system():
+    """Background thread to display system info every 10 seconds"""
+    while not STOP_MONITOR.is_set():
+        debug_log(get_system_info(), True)
+        time.sleep(10)
+
 def main():
     args = parse_args()
+    
+    # Start system monitor thread
+    monitor_thread = threading.Thread(target=monitor_system)
+    monitor_thread.daemon = True
+    monitor_thread.start()
     
     # Debug creator lists
     of_creators = []
@@ -377,6 +390,10 @@ def main():
         debug_log(f"🟢 Added {len(successful_ids)} new posts ({successful_downloads} files) to cache.", args.debug)
     else:
         debug_log("🟠 No New Items Found!", args.debug)
+
+    # Stop monitor thread
+    STOP_MONITOR.set()
+    monitor_thread.join(timeout=1)
 
 if __name__ == "__main__":
     main()
