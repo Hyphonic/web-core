@@ -162,7 +162,7 @@ def download_file(session, download_url, out_fname, file_id, show_debug=True):
 def collect_creator_posts(creator, platform, session, cached_ids, target_posts=50, disable_cache_check=False, show_debug=True):
     collected_posts = {}
     page = 1
-    offset = 50
+    offset = 0
     total_new_posts = 0
     total_pages_checked = 0
     total_checked_posts = 0
