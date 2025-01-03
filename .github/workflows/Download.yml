@@ -54,10 +54,6 @@ on:
         required: false
         default: '250'
         type: string
-      creators_rule34:
-        description: '[Rule34] Comma-separated list of creator tags'
-        required: false
-        type: string
 
 # Add concurrency group to prevent parallel runs
 #concurrency:
