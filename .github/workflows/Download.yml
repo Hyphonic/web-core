@@ -23,12 +23,12 @@ on:
       target_posts_coomer:
         description: '[Coomer] Number of posts to fetch per creator'
         required: false
-        default: '300'
+        default: '500'
         type: string
       max_urls_coomer:
         description: '[Coomer] Maximum total URLs to download'
         required: false
-        default: '250'
+        default: '500'
         type: string
       creators:
         description: '[Coomer] Comma-separated list of creators (leave empty for default)'
@@ -37,22 +37,22 @@ on:
       target_posts_kemono:
         description: '[Kemono] Number of posts to fetch per creator'
         required: false
-        default: '150'
+        default: '500'
         type: string
       max_urls_kemono:
         description: '[Kemono] Maximum total URLs to download'
         required: false
-        default: '100'
+        default: '500'
         type: string
       target_posts_rule34:
         description: '[Rule34] Number of posts to fetch per creator'
         required: false
-        default: '300'
+        default: '2000'
         type: string
       max_urls_rule34:
         description: '[Rule34] Maximum total URLs to download'
         required: false
-        default: '250'
+        default: '2000'
         type: string
 
 # Add concurrency group to prevent parallel runs
@@ -228,8 +228,8 @@ jobs:
           python scripts/coomer_downloader.py \
             $([ "${{ inputs.show_debug }}" == "true" ] && echo "--debug") \
             $([ "${{ inputs.disable_cache_check }}" == "true" ] && echo "--disable-cache") \
-            --target-posts "${{ inputs.target_posts_coomer || '300' }}" \
-            --max-urls "${{ inputs.max_urls_coomer || '250' }}" \
+            --target-posts "${{ inputs.target_posts_coomer || '500' }}" \
+            --max-urls "${{ inputs.max_urls_coomer || '500' }}" \
             --of-creators "$OF_CREATORS" \
             --fansly-creators "$FANSLY_CREATORS"
       - name: 🌐 Upload Coomer Posts with Rclone
@@ -311,8 +311,8 @@ jobs:
             --creators "$KEMONO_CREATORS" \
             $([ "${{ inputs.show_debug }}" == "true" ] && echo "--debug") \
             $([ "${{ inputs.disable_cache_check }}" == "true" ] && echo "--disable-cache") \
-            --target-posts "${{ inputs.target_posts_kemono || '150' }}" \
-            --max-urls "${{ inputs.max_urls_kemono || '100' }}"
+            --target-posts "${{ inputs.target_posts_kemono || '500' }}" \
+            --max-urls "${{ inputs.max_urls_kemono || '500' }}"
       - name: 🌐 Upload Kemono Posts with Rclone
         run: |
           echo "🟢 Uploading Kemono posts to Pixeldrain..."
@@ -392,8 +392,8 @@ jobs:
           python scripts/rule34_downloader.py \
             $([ "${{ inputs.show_debug }}" == "true" ] && echo "--debug") \
             $([ "${{ inputs.disable_cache_check }}" == "true" ] && echo "--disable-cache") \
-            --target-posts "${{ inputs.target_posts_rule34 || '1000' }}" \
-            --max-urls "${{ inputs.max_urls_rule34 || '1000' }}" \
+            --target-posts "${{ inputs.target_posts_rule34 || '2000' }}" \
+            --max-urls "${{ inputs.max_urls_rule34 || '2000' }}" \
             --creators "$CREATORS"
 
       - name: 🌐 Upload Rule34 Posts with Rclone
