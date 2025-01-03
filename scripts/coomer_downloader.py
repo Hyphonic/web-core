@@ -25,6 +25,18 @@ active_downloads = {}
 downloads_lock = threading.Lock()
 STOP_MONITOR = threading.Event()
 
+# Add to top with other globals
+total_downloaded_bytes = 0
+download_bytes_lock = threading.Lock()
+
+def format_size(bytes):
+    """Convert bytes to human readable format"""
+    for unit in ['B', 'KB', 'MB', 'GB']:
+        if bytes < 1024:
+            return f"{bytes:.2f}{unit}"
+        bytes /= 1024
+    return f"{bytes:.2f}TB"
+
 def parse_args():
     parser = argparse.ArgumentParser(description='Coomer.party Downloader')
     parser.add_argument('--debug', action='store_true', default=True, help='Enable debug logging')
@@ -59,6 +71,10 @@ def get_system_info():
     mem_used_gb = mem_total_gb - mem_free_gb
     mem_percent = mem.percent
 
+    # Add total downloaded size
+    global total_downloaded_bytes
+    total_downloaded = format_size(total_downloaded_bytes)
+
     # Active downloads
     with downloads_lock:
         current_tasks = list(active_downloads.items())
@@ -70,6 +86,7 @@ def get_system_info():
         f"  • Total: {disk_total_gb:.1f}GB",
         f"  • Used:  {disk_used_gb:.1f}GB ({disk_percent}%)",
         f"  • Free:  {disk_free_gb:.1f}GB ({100-disk_percent}%)",
+        f"  • Downloaded: {total_downloaded}",
         "",
         f"🧠 Memory Usage:",
         f"  • Total: {mem_total_gb:.1f}GB",
@@ -79,6 +96,8 @@ def get_system_info():
         "🔄 Active Downloads:",
     ]
     
+    if not current_tasks:
+        panel.append("  • No active downloads.")
     for thread_name, (file_id, started_at) in current_tasks:
         elapsed = (datetime.now() - started_at).seconds
         panel.append(f"  • {thread_name}: {file_id} (running {elapsed}s)")
@@ -97,9 +116,15 @@ def download_file(session, download_url, out_fname, file_id, show_debug=True):
         with session.get(download_url, stream=True, timeout=TIMEOUT_SECONDS) as r:
             r.raise_for_status()
             with open(out_fname, "wb") as f:
+                bytes_downloaded = 0
                 for chunk in r.iter_content(chunk_size=1024*1024):  # 1MB chunks
-                    if chunk:  # Filter out keep-alive chunks
+                    if chunk:
+                        bytes_downloaded += len(chunk)
                         f.write(chunk)
+                # Update total downloaded bytes
+                global total_downloaded_bytes
+                with download_bytes_lock:
+                    total_downloaded_bytes += bytes_downloaded
         return True
     except Exception as e:
         debug_log(f"  🔴 Error downloading file {file_id}: {e}", show_debug)
@@ -257,10 +282,10 @@ def display_download_results(unique_tasks, cached_ids, successful_downloads, suc
     print("=" * 50 + "\n")
 
 def monitor_system():
-    """Background thread to display system info every 10 seconds"""
+    """Background thread to display system info every 30 seconds"""
     while not STOP_MONITOR.is_set():
         debug_log(get_system_info(), True)
-        time.sleep(10)
+        time.sleep(30)
 
 def main():
     args = parse_args()
