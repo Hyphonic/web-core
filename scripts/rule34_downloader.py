@@ -16,18 +16,28 @@ TIMEOUT_SECONDS = 300  # 5 minutes
 MAX_WORKERS = 8
 MAX_URLS = 250
 MIN_DISK_SPACE = 2 * 1024 * 1024 * 1024  # 2GB in bytes
-BASE_URL = 'https://api.rule34.xxx/index.php'
+BASE_URL = 'https://api.rule34.xxx/index.php'  # Rule34 API endpoint
 
 active_downloads = {}
 downloads_lock = threading.Lock()
 
+# Add to top with other globals
 total_downloaded_bytes = 0
 download_bytes_lock = threading.Lock()
 
+# Add to globals section
 last_bytes_check = 0
 last_check_time = time.time()
 current_speed = 0  # bytes per second
 speed_lock = threading.Lock()
+
+def format_size(bytes):
+    """Convert bytes to human readable format"""
+    for unit in ['B', 'KB', 'MB', 'GB']:
+        if bytes < 1024:
+            return f"{bytes:.2f}{unit}"
+        bytes /= 1024
+    return f"{bytes:.2f}TB"
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Rule34 Downloader')
@@ -38,26 +48,129 @@ def parse_args():
     parser.add_argument('--creators', type=str, required=False, help='Comma-separated list of creator tags')
     return parser.parse_args()
 
+def anonymize_name(name):
+    """Convert creator names to anonymous format (first 2 chars + ****)"""
+    return f"{name[:2]}****" if len(name) > 2 else name
+
 def debug_log(msg, show_debug=True):
     if show_debug:
         print(msg)
 
+def calculate_speed(new_bytes):
+    """Calculate current download speed"""
+    global last_bytes_check, last_check_time, current_speed
+    
+    with speed_lock:
+        now = time.time()
+        time_diff = now - last_check_time
+        if time_diff > 0:
+            bytes_diff = new_bytes - last_bytes_check
+            current_speed = bytes_diff / time_diff
+            last_bytes_check = new_bytes
+            last_check_time = now
+        return current_speed
+
+def get_system_info():
+    """Get formatted system information panel"""
+    # Disk info
+    disk = psutil.disk_usage('cache')
+    disk_total_gb = disk.total / (1024**3)
+    disk_free_gb = disk.free / (1024**3)
+    disk_used_gb = disk.used / (1024**3)
+    disk_percent = disk.percent
+
+    # Memory info
+    mem = psutil.virtual_memory()
+    mem_total_gb = mem.total / (1024**3)
+    mem_free_gb = mem.available / (1024**3)
+    mem_used_gb = mem_total_gb - mem_free_gb
+    mem_percent = mem.percent
+
+    # Add total downloaded size
+    global total_downloaded_bytes
+    total_downloaded = format_size(total_downloaded_bytes)
+
+    # Get current speed
+    speed = format_size(current_speed) + "/s"
+
+    # Active downloads
+    with downloads_lock:
+        current_tasks = list(active_downloads.items())
+
+    panel = [
+        "\n💻 System Status Panel 💻",
+        "=" * 50,
+        f"📊 Storage Status (cache directory):",
+        f"  • Total: {disk_total_gb:.1f}GB",
+        f"  • Used:  {disk_used_gb:.1f}GB ({disk_percent}%)",
+        f"  • Free:  {disk_free_gb:.1f}GB ({100-disk_percent}%)",
+        f"  • Downloaded: {total_downloaded}",
+        f"  • Speed: {speed}",
+        "",
+        f"🧠 Memory Usage:",
+        f"  • Total: {mem_total_gb:.1f}GB",
+        f"  • Used:  {mem_used_gb:.1f}GB ({mem_percent}%)",
+        f"  • Free:  {mem_free_gb:.1f}GB ({100-mem_percent}%)",
+        "",
+        "🔄 Active Downloads:",
+    ]
+    
+    if not current_tasks:
+        panel.append("  • No active downloads.")
+    for thread_name, (file_id, started_at) in current_tasks:
+        elapsed = (datetime.now() - started_at).seconds
+        panel.append(f"  • {thread_name}: {file_id} (running {elapsed}s)")
+    
+    panel.extend(["", "=" * 50])
+    return "\n".join(panel)
+
+def download_file(session, download_url, out_fname, file_id, show_debug=True):
+    """Download file using streaming to minimize memory usage"""
+    thread_name = threading.current_thread().name
+    with downloads_lock:
+        active_downloads[thread_name] = (file_id, datetime.now())
+    
+    try:
+        os.makedirs(os.path.dirname(out_fname), exist_ok=True)
+        with session.get(download_url, stream=True, timeout=TIMEOUT_SECONDS) as r:
+            r.raise_for_status()
+            with open(out_fname, "wb") as f:
+                bytes_downloaded = 0
+                start_time = time.time()
+                for chunk in r.iter_content(chunk_size=1024*1024):  # 1MB chunks
+                    if chunk:
+                        bytes_downloaded += len(chunk)
+                        f.write(chunk)
+                        
+                # Update total and calculate speed
+                global total_downloaded_bytes
+                with download_bytes_lock:
+                    total_downloaded_bytes += bytes_downloaded
+                    calculate_speed(total_downloaded_bytes)
+        return True
+    except Exception as e:
+        debug_log(f"  🔴 Error downloading file {file_id}: {e}", show_debug)
+        return False
+    finally:
+        with downloads_lock:
+            active_downloads.pop(thread_name, None)
+
 def collect_creator_posts(creator, session, cached_ids, target_posts=50, disable_cache_check=False, show_debug=True):
     collected_posts = {}
-    page = 0  # Rule34 starts at page 0
+    page = 0  # Rule34 starts at 0
     total_new_posts = 0
     total_pages_checked = 0
     total_checked_posts = 0
 
     while total_new_posts < target_posts:
-        # Rule34 API params
+        # Rule34 API parameters
         params = {
             'page': 'dapi',
             's': 'post',
             'q': 'index',
             'json': '1',
             'tags': creator,
-            'pid': page  # pid = page number (0-based)
+            'pid': page  # page number
         }
         
         try:
@@ -80,24 +193,30 @@ def collect_creator_posts(creator, session, cached_ids, target_posts=50, disable
                     continue
                     
                 page_stats['new'] += 1
-                file_url = item.get('url')
+                file_url = item.get('file_url')
                 
                 if file_url:
+                    collected_posts[file_id] = []
                     creator_dir = os.path.join("cache", creator)
                     file_ext = os.path.splitext(file_url)[1]
                     out_fname = os.path.join(creator_dir, f"{file_id}{file_ext}")
-                    collected_posts[file_id] = [(file_url, out_fname)]
+                    collected_posts[file_id].append((file_url, out_fname))
                     total_new_posts += 1
                         
                 if total_new_posts >= target_posts:
                     break
             
             debug_log(f"  📄 Page {page}: Found {page_stats['new']} new posts, skipped {page_stats['cached']} cached posts", show_debug)
-            page += 1  # Move to next page
+            page += 1
             
         except Exception as e:
             debug_log(f"🔴 Failed to fetch page {page} for {creator}: {e}", show_debug)
             break
+    
+    debug_log(f"📊 Creator {creator} summary:", show_debug)
+    debug_log(f"  • Pages checked: {total_pages_checked}", show_debug)
+    debug_log(f"  • Posts checked: {total_checked_posts}", show_debug)
+    debug_log(f"  • New posts found: {len(collected_posts)}", show_debug)
     
     return collected_posts
 
@@ -191,7 +310,7 @@ def main():
         debug_log(f"🔵 Found {len(creators)} Rule34 creators: {[anonymize_name(c) for c in creators]}", args.debug)
     
     if not creators:
-        debug_log("🔴 No Rule34 creators specified!", args.debug)
+        debug_log("🔴 No creators specified!", args.debug)
         return
 
     cache_file = "cache/rule34_ids.json"
@@ -207,7 +326,7 @@ def main():
     try:
         with open(cache_file, "r") as f:
             cached_ids = set(json.load(f))
-        debug_log("🟢 Loaded cached Rule34 IDs.", args.debug)
+        debug_log("🟢 Loaded cached Coomer IDs.", args.debug)
     except:
         cached_ids = set()
         debug_log("🔴 No cache found. Starting fresh.", args.debug)
@@ -223,7 +342,6 @@ def main():
     successful_ids = set()
     successful_downloads = 0
 
-    # Collect posts from all creators
     for creator in creators:
         debug_log(f"🟢 Processing Rule34 creator: {anonymize_name(creator)}", args.debug)
         creator_posts = collect_creator_posts(
