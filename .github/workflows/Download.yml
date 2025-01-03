@@ -46,9 +46,9 @@ on:
         type: string
 
 # Add concurrency group to prevent parallel runs
-concurrency:
-  group: ${{ github.workflow }}
-  cancel-in-progress: true
+#concurrency:
+#  group: ${{ github.workflow }}
+#  cancel-in-progress: true
 
 jobs:
   check-workflows:
