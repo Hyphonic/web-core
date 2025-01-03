@@ -13,8 +13,8 @@ import time
 
 # Constants and Configuration
 TIMEOUT_SECONDS = 300  # 5 minutes
-MAX_WORKERS = 16
-MAX_URLS = 250
+MAX_WORKERS = 24
+MAX_URLS = 500
 MIN_DISK_SPACE = 2 * 1024 * 1024 * 1024  # 2GB in bytes
 PLATFORMS = {
     'onlyfans': 'https://coomer.su/api/v1/onlyfans/user',
