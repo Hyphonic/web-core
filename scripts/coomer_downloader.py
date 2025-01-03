@@ -6,6 +6,9 @@ import concurrent.futures
 import argparse
 from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util.retry import Retry
+import psutil
+import threading
+from datetime import datetime
 
 # Constants and Configuration
 TIMEOUT_SECONDS = 300  # 5 minutes
@@ -16,6 +19,9 @@ PLATFORMS = {
     'onlyfans': 'https://coomer.su/api/v1/onlyfans/user',
     'fansly': 'https://coomer.su/api/v1/fansly/user'
 }
+
+active_downloads = {}
+downloads_lock = threading.Lock()
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Coomer.party Downloader')
@@ -35,17 +41,69 @@ def debug_log(msg, show_debug=True):
     if show_debug:
         print(msg)
 
+def get_system_info():
+    """Get formatted system information panel"""
+    # Disk info
+    disk = psutil.disk_usage('cache')
+    disk_total_gb = disk.total / (1024**3)
+    disk_free_gb = disk.free / (1024**3)
+    disk_used_gb = disk.used / (1024**3)
+    disk_percent = disk.percent
+
+    # Memory info
+    mem = psutil.virtual_memory()
+    mem_total_gb = mem.total / (1024**3)
+    mem_free_gb = mem.available / (1024**3)
+    mem_used_gb = mem_total_gb - mem_free_gb
+    mem_percent = mem.percent
+
+    # Active downloads
+    with downloads_lock:
+        current_tasks = list(active_downloads.items())
+
+    panel = [
+        "\n💻 System Status Panel 💻",
+        "=" * 50,
+        f"📊 Storage Status (cache directory):",
+        f"  • Total: {disk_total_gb:.1f}GB",
+        f"  • Used:  {disk_used_gb:.1f}GB ({disk_percent}%)",
+        f"  • Free:  {disk_free_gb:.1f}GB ({100-disk_percent}%)",
+        "",
+        f"🧠 Memory Usage:",
+        f"  • Total: {mem_total_gb:.1f}GB",
+        f"  • Used:  {mem_used_gb:.1f}GB ({mem_percent}%)",
+        f"  • Free:  {mem_free_gb:.1f}GB ({100-mem_percent}%)",
+        "",
+        "🔄 Active Downloads:",
+    ]
+    
+    for thread_name, (file_id, started_at) in current_tasks:
+        elapsed = (datetime.now() - started_at).seconds
+        panel.append(f"  • {thread_name}: {file_id} (running {elapsed}s)")
+    
+    panel.extend(["", "=" * 50])
+    return "\n".join(panel)
+
 def download_file(session, download_url, out_fname, file_id, show_debug=True):
+    thread_name = threading.current_thread().name
+    with downloads_lock:
+        active_downloads[thread_name] = (file_id, datetime.now())
+    
     try:
+        result = False
         r = session.get(download_url, timeout=TIMEOUT_SECONDS)
         r.raise_for_status()
         os.makedirs(os.path.dirname(out_fname), exist_ok=True)
         with open(out_fname, "wb") as out:
             out.write(r.content)
-        return True
+        result = True
+        return result
     except Exception as e:
         debug_log(f"  🔴 Error downloading file {file_id}: {e}", show_debug)
         return False
+    finally:
+        with downloads_lock:
+            active_downloads.pop(thread_name, None)
 
 def collect_creator_posts(creator, platform, session, cached_ids, target_posts=50, disable_cache_check=False, show_debug=True):
     collected_posts = {}
@@ -286,8 +344,9 @@ def main():
             for (url, fname, fid) in tasks
         }
         for future in concurrent.futures.as_completed(future_map):
-            # Check disk space every 10 downloads
-            if completed % 10 == 0:
+            # Check disk space and show system panel every 50 downloads
+            if completed % 50 == 0:
+                debug_log(get_system_info(), args.debug)
                 has_space, gb_free = check_disk_space("cache")
                 if not has_space:
                     debug_log(f"🔴 Stopping downloads - Only {gb_free:.1f}GB free space left!", args.debug)
